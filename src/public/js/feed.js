@@ -1,0 +1,92 @@
+import { $, UI_CONFIG, state, setState, esc, safeAttr, fmtDate, readTime, excerpt, md, toast, api, isAuthed, go } from "./utils.js";
+import { showAuthPanel } from "./auth.js";
+
+export function renderCard(p, extraClass = "") {
+  const tags = UI_CONFIG.features.tags ? (p.tags || []).map((t) => `<span>${esc(t)}</span>`).join("") : "";
+  const cc = (typeof p.comment_count === "number" && UI_CONFIG.features.comments)
+    ? `<span class="dot"></span><span>${p.comment_count} comment${p.comment_count === 1 ? "" : "s"}</span>`
+    : "";
+  const author = UI_CONFIG.layout.showAuthorInCard ? `<span>${esc(p.author || "Anonymous")}</span><span class="dot"></span>` : "";
+  const rt = UI_CONFIG.features.readTime ? `<span class="dot"></span><span>${readTime(p.body)}</span>` : "";
+  return (
+    `<div class="card ${esc(extraClass)}" role="article" tabindex="0" data-post-id="${safeAttr(p._id)}">` +
+    `<div class="meta">${author}<span>${fmtDate(p.created_at)}</span>${rt}${cc}</div>` +
+    `<h2>${esc(p.title)}</h2>` +
+    `<div class="excerpt">${esc(excerpt(p.body))}</div>` +
+    (tags ? `<div class="tags">${tags}</div>` : "") +
+    "</div>"
+  );
+}
+
+export async function handleArticleRoute(id) {
+  if (!id) { go("home"); return; }
+  setState("currentPostId", id);
+  $("#article-content").innerHTML = '<span class="loading-text">Loading...</span>';
+  const r = await api("getPost", { pathParams: { id } });
+  const p = r.data?.data;
+  if (!p) {
+    $("#article-content").innerHTML = `<a href="#blog" class="back">\u2190 ${esc(UI_CONFIG.labels.backToPosts)}</a><p>${esc(UI_CONFIG.labels.postNotFound)}</p>`;
+    return;
+  }
+
+  const tags = UI_CONFIG.features.tags
+    ? (p.tags || []).map((t) => `<span class="tag" style="background:var(--surface-3);color:var(--text-faint)">${esc(t)}</span>`).join(" ")
+    : "";
+  const rt = UI_CONFIG.features.readTime ? `<span class="dot"></span><span>${readTime(p.body)}</span>` : "";
+  let commentSection = "";
+  if (UI_CONFIG.features.comments) {
+    const composer = !isAuthed()
+      ? `<div class="notice">${esc(UI_CONFIG.labels.signInToComment)} <a href="#" data-action="show-register">${esc(UI_CONFIG.labels.register)}</a> \u00b7 <a href="#" data-action="show-login">${esc(UI_CONFIG.labels.signIn)}</a></div>`
+      : `<div class="comment-composer"><textarea id="comment-body" placeholder="${safeAttr(UI_CONFIG.labels.commentPrompt)}"></textarea><div><button class="btn btn-primary btn-sm" data-action="post-comment">${esc(UI_CONFIG.labels.postComment)}</button></div></div><div class="notice">${esc(UI_CONFIG.labels.commentPending)} <a href="/public/community.html" target="_blank">Read guidelines</a></div>`;
+    commentSection = `<div class="comments"><h3>${esc(UI_CONFIG.labels.commentsTitle)}</h3>${composer}<div id="comment-list"><span class="loading-text">Loading comments...</span></div></div>`;
+  }
+
+  $("#article-content").innerHTML =
+    `<a href="#blog" class="back">\u2190 ${esc(UI_CONFIG.labels.backToPosts)}</a>` +
+    "<header>" +
+    `<h1 tabindex="-1">${esc(p.title)}</h1>` +
+    `<div class="meta"><span>${esc(p.author || "Anonymous")}</span><span class="dot"></span><span>${fmtDate(p.created_at)}</span>${rt}${tags ? ` \u00a0 ${tags}` : ""}</div>` +
+    "</header>" +
+    `<div class="prose">${md(p.body || "")}</div>` +
+    commentSection;
+
+  if (UI_CONFIG.features.comments) loadComments(id);
+  return p;
+}
+
+async function loadComments(postId) {
+  const r = await api("listComments", { params: { filter: `post_id:${postId}`, scope: "approved", sort: "-created_at", limit: "100" } });
+  const cmts = r.data?.data || [];
+  const el = $("#comment-list");
+  if (!el) return;
+  if (!cmts.length) {
+    el.innerHTML = `<p class="loading-text">${esc(UI_CONFIG.labels.noComments)}</p>`;
+    return;
+  }
+  el.innerHTML = cmts.map((c) =>
+    `<div class="cmt"><div class="cmt-meta"><strong>${esc(c.author || "Anonymous")}</strong><span>${fmtDate(c.created_at)}</span></div><div class="cmt-body">${esc(c.body)}</div></div>`
+  ).join("");
+}
+
+async function postComment() {
+  if (!isAuthed()) { showAuthPanel("login"); return; }
+  const bodyEl = $("#comment-body");
+  const body = bodyEl?.value.trim();
+  if (!body) { toast("Write something first", "err"); return; }
+  const r = await api("createComment", { body: { post_id: state.currentPostId, body } });
+  if (!r.ok) { toast(r.data?.detail || "Could not submit comment", "err"); return; }
+  bodyEl.value = "";
+  toast(r.data?.data?.approved ? "Comment posted and visible" : "Comment submitted for approval", "info");
+  loadComments(state.currentPostId);
+}
+
+export function bindArticleEvents() {
+  $("#article-content").addEventListener("click", (e) => {
+    const el = e.target.closest("[data-action]");
+    if (!el) return;
+    e.preventDefault();
+    if (el.dataset.action === "post-comment") postComment();
+    if (el.dataset.action === "show-login") showAuthPanel("login");
+    if (el.dataset.action === "show-register") showAuthPanel("register");
+  });
+}

@@ -1,0 +1,170 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' https://cdn.jsdelivr.net; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; img-src 'self' https://images.unsplash.com data:; connect-src 'self' https://cdn.jsdelivr.net https://fonts.googleapis.com https://fonts.gstatic.com; font-src 'self' https://fonts.gstatic.com;">
+  <title>blog-zero</title>
+  <meta name="description" content="A full-featured blog built from a single JSON manifest.">
+  <meta property="og:title" content="zero-code blog">
+  <meta property="og:description" content="A full-featured blog built from a single JSON manifest.">
+  <meta property="og:type" content="website">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:opsz,wght@14..32,400..800&display=swap" rel="stylesheet">
+  <link rel="icon" href="/public/favicon.svg" type="image/svg+xml">
+  <link rel="stylesheet" href="/public/style.css">
+</head>
+<body>
+  <nav class="top" role="navigation" aria-label="Main navigation">
+    <div class="nav-inner">
+      <a class="brand" href="#home" id="nav-brand"><img src="/public/zero-logo.png" alt="" class="brand-logo"><span>blog-zero</span></a>
+      <div class="nav-links" id="nav-links" role="tablist" aria-label="Views">
+        <button role="tab" aria-selected="true" data-route="home">Home</button>
+        <button role="tab" data-route="blog">Blog</button>
+        <a href="/public/about.html" class="nav-link" role="tab">About</a>
+        <button role="tab" data-route="compose" class="admin-only hidden">Write</button>
+        <button role="tab" data-route="manage" class="admin-only hidden">Manage</button>
+      </div>
+      <div class="nav-right">
+        <button class="theme-toggle desktop-only" id="theme-toggle" aria-label="Toggle dark mode" role="switch" aria-checked="true">
+          <span class="toggle-track">
+            <span class="toggle-icon">&#9790;</span>
+            <span class="toggle-icon">&#9788;</span>
+            <span class="toggle-thumb"></span>
+          </span>
+        </button>
+        <div class="auth-area" id="auth-area"></div>
+        <button class="hamburger" id="hamburger" aria-label="Menu" aria-expanded="false">
+          <span></span><span></span><span></span>
+        </button>
+      </div>
+    </div>
+  </nav>
+
+  <main class="wrap" role="main">
+    <div class="auth-panel" id="auth-panel" role="dialog" aria-label="Authentication" aria-hidden="true">
+      <button class="auth-close" id="auth-close" aria-label="Close">&times;</button>
+      <img src="/public/zero-logo.png" alt="blog-zero" class="auth-logo">
+      <h3 id="auth-panel-title">Sign in</h3>
+      <p class="auth-subtitle" id="auth-subtitle">Welcome back to blog-zero</p>
+      <div class="auth-fields">
+        <div id="auth-name-row" class="hidden">
+          <input id="auth-name" placeholder="Your name" autocomplete="name">
+        </div>
+        <input id="auth-email" placeholder="Email address" type="email" autocomplete="email">
+        <input id="auth-password" type="password" placeholder="Password" autocomplete="current-password">
+      </div>
+      <button class="btn btn-primary auth-submit-btn" id="auth-submit">Continue</button>
+      <p class="auth-switch" id="auth-switch"></p>
+    </div>
+
+    <section class="view active" id="view-home" aria-label="Home">
+      <div class="hero" id="hero" role="banner" aria-label="Featured">
+        <div class="hero-slide" id="hero-slide-a"></div>
+        <div class="hero-slide" id="hero-slide-b"></div>
+        <div class="hero-overlay" id="hero-overlay"></div>
+        <div class="hero-content">
+          <h1 id="hero-headline"></h1>
+          <p id="hero-caption"></p>
+        </div>
+        <div class="hero-dots" id="hero-dots" aria-label="Slide navigation"></div>
+      </div>
+      <header class="feed-header">
+        <h1 tabindex="-1">Recent Posts</h1>
+      </header>
+      <div id="home-recent" aria-label="Recent posts"></div>
+      <div class="cta-block" id="home-cta">
+        <a href="#blog" class="btn btn-outline">Browse all posts &rarr;</a>
+      </div>
+    </section>
+
+    <section class="view" id="view-blog" aria-label="Browse posts">
+      <header class="feed-header">
+        <h1 id="blog-title" tabindex="-1">Blog</h1>
+      </header>
+      <div class="blog-toolbar">
+        <input type="search" id="blog-search" class="search-bar" placeholder="Search posts..." aria-label="Search posts">
+        <div class="sort-toggle" id="blog-sort">
+          <button class="active" data-sort="newest">Newest</button>
+          <button data-sort="oldest">Oldest</button>
+        </div>
+      </div>
+      <div class="tag-chips" id="blog-tags" aria-label="Filter by tag"></div>
+      <div id="blog-list" role="feed" aria-label="Posts"></div>
+    </section>
+
+    <section class="view" id="view-article" aria-label="Article">
+      <article class="article" id="article-content"></article>
+    </section>
+
+    <section class="view" id="view-compose" aria-label="Post editor">
+      <div class="compose">
+        <h1 id="compose-title" tabindex="-1">New Post</h1>
+        <input class="title-input" id="compose-post-title" placeholder="Post title..." autocomplete="off" aria-label="Post title">
+        <div class="meta-row">
+          <input id="compose-author" placeholder="Author name" autocomplete="off">
+          <input id="compose-tags" placeholder="Tags (comma-separated)" autocomplete="off">
+        </div>
+        <div class="editor">
+          <div class="editor-pane">
+            <div class="editor-label">Markdown</div>
+            <textarea id="compose-body" placeholder="Write your post in Markdown..." aria-label="Post body in Markdown"></textarea>
+          </div>
+          <div class="editor-pane">
+            <div class="editor-label">Preview</div>
+            <div class="preview prose" id="compose-preview">
+              <span class="placeholder-text">Start typing to see a live preview...</span>
+            </div>
+          </div>
+        </div>
+        <div class="actions">
+          <button class="btn btn-primary" id="btn-publish">Publish</button>
+          <button class="btn btn-outline" id="btn-draft">Save Draft</button>
+          <input type="hidden" id="compose-edit-id">
+          <span id="compose-edit-hint" class="edit-hint"></span>
+        </div>
+      </div>
+    </section>
+
+    <section class="view" id="view-manage" aria-label="Admin dashboard">
+      <div class="manage">
+        <h1 tabindex="-1">Manage</h1>
+        <p class="sub">Admin area for posts and comment moderation.</p>
+        <div class="stats" id="manage-stats"></div>
+        <div class="tabs" id="manage-tabs" role="tablist" aria-label="Post filters">
+          <button class="active" data-scope="all" role="tab">All</button>
+          <button data-scope="published" role="tab">Published</button>
+          <button data-scope="drafts" role="tab">Drafts</button>
+          <button data-scope="archived" role="tab">Archived</button>
+          <button data-scope="trash" role="tab">Trash</button>
+        </div>
+        <div class="manage-list" id="manage-list" aria-label="Posts list"></div>
+        <div class="pending-section">
+          <h3>Pending comments</h3>
+          <div id="pending-comments"></div>
+        </div>
+        <div class="pending-section">
+          <h3>Audit log <span class="audit-label">(auto-populated via hooks)</span></h3>
+          <div id="audit-log"></div>
+        </div>
+      </div>
+    </section>
+  </main>
+
+  <footer class="site-footer" id="site-footer">
+    <span id="footer-text"></span>
+    <nav class="footer-links">
+      <a href="https://github.com/ranfysvalle02/blog-zero" target="_blank" rel="noopener noreferrer"><svg class="footer-icon" viewBox="0 0 16 16" fill="currentColor"><path d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27.68 0 1.36.09 2 .27 1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.01 8.01 0 0016 8c0-4.42-3.58-8-8-8z"/></svg>GitHub</a>
+      <span class="footer-dot"></span>
+      <a href="https://pypi.org/project/mdb-engine/" target="_blank" rel="noopener noreferrer"><svg class="footer-icon" viewBox="0 0 16 16" fill="currentColor"><path d="M8.5 1.5l5 2.5v8l-5 2.5-5-2.5v-8l5-2.5zm0-1.5L2 2.75v9.5L8.5 15l6.5-2.75v-9.5L8.5 0z"/><path d="M8.5 5L5 6.75v4.5L8.5 13l3.5-1.75v-4.5L8.5 5z" opacity=".4"/></svg>PyPI</a>
+      <span class="footer-dot"></span>
+      <a href="/public/community.html">Guidelines &amp; Terms</a>
+    </nav>
+  </footer>
+
+  <div class="toasts" id="toasts" role="status" aria-live="polite"></div>
+  <script src="https://cdn.jsdelivr.net/npm/gsap@3/dist/gsap.min.js"></script>
+  <script type="module" src="/public/js/app.js"></script>
+</body>
+</html>

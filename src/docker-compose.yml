@@ -1,0 +1,53 @@
+# Zero-Code Blog — Docker Compose
+#
+# Quick start:
+#   docker compose up --build
+#
+# Production-ready overrides:
+#   ADMIN_EMAIL=ceo@corp.com ADMIN_PASSWORD=<strong> MDB_JWT_SECRET=<random-64-chars> docker compose up --build
+#
+# All secrets are passed via environment variables — never in manifest.json.
+# The manifest uses {{env.ADMIN_EMAIL}} / {{env.ADMIN_PASSWORD}} placeholders
+# which the engine resolves at startup.
+
+services:
+  api:
+    build: .
+    volumes:
+      - ./manifest.json:/app/manifest.json
+      - ./public:/app/public
+    environment:
+      # --- Database ---
+      - MONGODB_URI=mongodb://mongo:27017/?directConnection=true
+      - MDB_DB_NAME=mdb_engine
+
+      # --- Security (CHANGE THESE in production) ---
+      - MDB_JWT_SECRET=${MDB_JWT_SECRET:-dev_zero_code_blog_jwt_secret_change_me_please_32_chars}
+      - MDB_ENGINE_MASTER_KEY=${MDB_ENGINE_MASTER_KEY:-dev_master_key_change_me_in_production_32ch}
+
+      # --- Admin seeding ---
+      - ADMIN_EMAIL=${ADMIN_EMAIL:-admin@example.com}
+      - ADMIN_PASSWORD=${ADMIN_PASSWORD:-admin123}
+
+      # --- Internal (do not change) ---
+      - _MDB_SERVE_MANIFEST=/app/manifest.json
+    ports:
+      - "8000:8000"
+    depends_on:
+      mongo:
+        condition: service_healthy
+
+  mongo:
+    image: mongodb/mongodb-atlas-local:8.0
+    ports:
+      - "27017:27017"
+    volumes:
+      - mongo_data:/data/db
+    healthcheck:
+      test: ["CMD", "mongosh", "--eval", "db.adminCommand('ping')"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+volumes:
+  mongo_data:
