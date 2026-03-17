@@ -30,7 +30,7 @@ export function renderAuthArea() {
     $$(".admin-only").forEach((el) => el.classList.add("hidden"));
     return;
   }
-  const u = state.session.user || {};
+  const u = state.session?.user || {};
   area.innerHTML =
     `<span class="auth-user">${esc(u.email)} (${esc(u.role || "guest")})</span>` +
     `<button class="btn btn-outline btn-sm" data-action="logout">${esc(UI_CONFIG.labels.logout)}</button>`;

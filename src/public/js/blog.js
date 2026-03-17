@@ -11,6 +11,7 @@ let visibleCount = PAGE_SIZE;
 
 export async function loadBlog() {
   const container = $("#blog-list");
+  if (!container) return;
   visibleCount = PAGE_SIZE;
   container.innerHTML = renderSkeleton(4);
 
@@ -35,6 +36,7 @@ export async function loadBlog() {
 
 function renderTagChips() {
   const el = $("#blog-tags");
+  if (!el) return;
   if (!tagList.length) { el.innerHTML = ""; return; }
   el.innerHTML = tagList.map((t) =>
     `<button class="tag-chip${activeTag === t._id ? " active" : ""}" data-tag="${esc(t._id)}">${esc(t._id)} <span class="tag-count">${t.count}</span></button>`
@@ -72,8 +74,14 @@ function renderPosts() {
 }
 
 export function bindBlogEvents() {
+  const searchEl = $("#blog-search");
+  const tagsEl = $("#blog-tags");
+  const sortEl = $("#blog-sort");
+  const listEl = $("#blog-list");
+  if (!searchEl || !tagsEl || !sortEl || !listEl) return;
+
   let searchTimer;
-  $("#blog-search").addEventListener("input", (e) => {
+  searchEl.addEventListener("input", (e) => {
     clearTimeout(searchTimer);
     searchTimer = setTimeout(() => {
       searchQuery = e.target.value.trim();
@@ -82,7 +90,7 @@ export function bindBlogEvents() {
     }, 200);
   });
 
-  $("#blog-tags").addEventListener("click", (e) => {
+  tagsEl.addEventListener("click", (e) => {
     const btn = e.target.closest("[data-tag]");
     if (!btn) return;
     activeTag = btn.dataset.tag || null;
@@ -91,7 +99,7 @@ export function bindBlogEvents() {
     renderPosts();
   });
 
-  $("#blog-sort").addEventListener("click", (e) => {
+  sortEl.addEventListener("click", (e) => {
     const btn = e.target.closest("[data-sort]");
     if (!btn) return;
     sortDir = btn.dataset.sort;
@@ -100,7 +108,7 @@ export function bindBlogEvents() {
     renderPosts();
   });
 
-  $("#blog-list").addEventListener("click", (e) => {
+  listEl.addEventListener("click", (e) => {
     if (e.target.closest("#load-more-btn")) {
       visibleCount += PAGE_SIZE;
       renderPosts();
@@ -109,7 +117,7 @@ export function bindBlogEvents() {
     const card = e.target.closest("[data-post-id]");
     if (card) go(`article/${card.dataset.postId}`);
   });
-  $("#blog-list").addEventListener("keydown", (e) => {
+  listEl.addEventListener("keydown", (e) => {
     if (e.key !== "Enter") return;
     const card = e.target.closest("[data-post-id]");
     if (card) go(`article/${card.dataset.postId}`);

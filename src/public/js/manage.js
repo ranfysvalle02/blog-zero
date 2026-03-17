@@ -14,7 +14,9 @@ async function loadStats() {
     api("countPosts", { params: { scope: "drafts" } }),
     api("countPosts", { params: { scope: "archived" } }),
   ]);
-  $("#manage-stats").innerHTML =
+  const statsEl = $("#manage-stats");
+  if (!statsEl) return;
+  statsEl.innerHTML =
     `<div class="stat"><div class="n">${t.data?.count ?? 0}</div><div class="l">Total</div></div>` +
     `<div class="stat"><div class="n">${p.data?.count ?? 0}</div><div class="l">Published</div></div>` +
     `<div class="stat"><div class="n">${d.data?.count ?? 0}</div><div class="l">Drafts</div></div>` +
@@ -31,12 +33,14 @@ async function loadManage() {
   state.postCache.clear();
   posts.forEach((p) => state.postCache.set(p._id, p));
 
+  const listEl = $("#manage-list");
+  if (!listEl) return;
   if (!posts.length) {
-    $("#manage-list").innerHTML = `<div class="notice">${isTrash ? "Trash is empty." : "No posts in this view."}</div>`;
+    listEl.innerHTML = `<div class="notice">${isTrash ? "Trash is empty." : "No posts in this view."}</div>`;
     return;
   }
 
-  $("#manage-list").innerHTML = posts.map((p) => {
+  listEl.innerHTML = posts.map((p) => {
     const st = isTrash ? "deleted" : (p.status || "draft");
     let actions = "";
     if (isTrash) {
@@ -73,12 +77,14 @@ async function loadPendingComments() {
   if (!isAdmin()) return;
   const r = await api("listComments", { params: { scope: "pending", sort: "-created_at", limit: "50" } });
   const items = r.data?.data || [];
+  const pendingEl = $("#pending-comments");
+  if (!pendingEl) return;
   if (!items.length) {
-    $("#pending-comments").innerHTML = '<div class="notice">No comments pending approval.</div>';
+    pendingEl.innerHTML = '<div class="notice">No comments pending approval.</div>';
     return;
   }
-  $("#pending-comments").innerHTML = items.map((c) =>
-    `<div class="m-row"><div class="m-info"><div class="m-title">${esc(c.author || "Guest")} on post ${esc(c.post_id || "")}</div><div class="m-meta">${fmtDate(c.created_at)}</div><div style="margin-top:4px;color:var(--text-muted);font-size:.85rem">${esc(c.body || "")}</div></div><div class="m-actions"><button class="btn btn-success btn-sm" data-action="approve" data-id="${c._id}">Approve</button><button class="btn btn-outline btn-sm" data-action="keep-pending" data-id="${c._id}">Keep pending</button></div></div>`
+  pendingEl.innerHTML = items.map((c) =>
+    `<div class="m-row"><div class="m-info"><div class="m-title">${esc(c.author || "Guest")} on post ${esc(c.post_id || "")}</div><div class="m-meta">${fmtDate(c.created_at)}</div><div class="cmt-excerpt">${esc(c.body || "")}</div></div><div class="m-actions"><button class="btn btn-success btn-sm" data-action="approve" data-id="${c._id}">Approve</button><button class="btn btn-outline btn-sm" data-action="keep-pending" data-id="${c._id}">Keep pending</button></div></div>`
   ).join("");
 }
 
@@ -92,17 +98,24 @@ async function loadAuditLog() {
   if (!isAdmin()) return;
   const r = await api("listAuditLog", { params: { sort: "-timestamp", limit: "20" } });
   const items = r.data?.data || [];
+  const auditEl = $("#audit-log");
+  if (!auditEl) return;
   if (!items.length) {
-    $("#audit-log").innerHTML = '<div class="notice">No audit entries yet. Create, edit or delete a post to see hooks in action.</div>';
+    auditEl.innerHTML = '<div class="notice">No audit entries yet. Create, edit or delete a post to see hooks in action.</div>';
     return;
   }
-  $("#audit-log").innerHTML = items.map((e) =>
-    `<div class="m-row"><div class="m-info"><div class="m-title"><span class="tag" style="background:var(--surface-3);color:var(--text-muted)">${esc(e.event || "")}</span> &nbsp; ${esc(e.entity || "")} <span style="color:var(--text-faint)">${esc(e.entity_id || "").slice(0, 8)}...</span></div><div class="m-meta">${esc(e.actor || "system")} · ${fmtDate(e.timestamp)}</div></div></div>`
+  auditEl.innerHTML = items.map((e) =>
+    `<div class="m-row"><div class="m-info"><div class="m-title"><span class="tag tag-subtle">${esc(e.event || "")}</span> &nbsp; ${esc(e.entity || "")} <span class="text-faint">${esc(e.entity_id || "").slice(0, 8)}...</span></div><div class="m-meta">${esc(e.actor || "system")} · ${fmtDate(e.timestamp)}</div></div></div>`
   ).join("");
 }
 
 export function bindManageEvents() {
-  $("#manage-tabs").addEventListener("click", (e) => {
+  const tabsEl = $("#manage-tabs");
+  const listEl = $("#manage-list");
+  const pendingEl = $("#pending-comments");
+  if (!tabsEl || !listEl || !pendingEl) return;
+
+  tabsEl.addEventListener("click", (e) => {
     const btn = e.target.closest("[data-scope]");
     if (!btn) return;
     $$("#manage-tabs button").forEach((b) => b.classList.remove("active"));
@@ -111,7 +124,7 @@ export function bindManageEvents() {
     loadManage();
   });
 
-  $("#manage-list").addEventListener("click", (e) => {
+  listEl.addEventListener("click", (e) => {
     const btn = e.target.closest("[data-action]");
     if (!btn) return;
     const id = btn.dataset.id;
@@ -123,7 +136,7 @@ export function bindManageEvents() {
     if (btn.dataset.action === "restore") restorePost(id);
   });
 
-  $("#pending-comments").addEventListener("click", (e) => {
+  pendingEl.addEventListener("click", (e) => {
     const btn = e.target.closest("[data-action]");
     if (!btn) return;
     const id = btn.dataset.id;

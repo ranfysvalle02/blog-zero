@@ -1084,6 +1084,13 @@ nav.top .nav-links a.nav-link.active { color: var(--text); background: var(--acc
   background: var(--text-faint);
 }
 
+/* --- Inline-style replacements (CSP: no unsafe-inline) --- */
+.flex-1 { flex: 1; }
+.tag-neutral { background: var(--surface-3); color: var(--text-faint); }
+.tag-subtle { background: var(--surface-3); color: var(--text-muted); }
+.cmt-excerpt { margin-top: 4px; color: var(--text-muted); font-size: 0.85rem; }
+.text-faint { color: var(--text-faint); }
+
 /* --- Utilities --- */
 .hidden { display: none !important; }
 

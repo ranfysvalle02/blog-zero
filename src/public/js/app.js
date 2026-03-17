@@ -142,7 +142,7 @@ function initHamburger() {
       const u = state.session?.user || {};
       authHtml =
         `<div class="drawer-auth">` +
-        `<span class="auth-user" style="flex:1">${esc(u.email)}</span>` +
+        `<span class="auth-user flex-1">${esc(u.email)}</span>` +
         `<button class="btn btn-outline btn-sm" data-action="logout">${esc(UI_CONFIG.labels.logout)}</button>` +
         `</div>`;
     }

@@ -150,11 +150,25 @@ export function renderSkeleton(count = 3) {
   return html + "</div>";
 }
 
+const _retryFns = new Map();
+let _retryCounter = 0;
+
 export function renderError(message, retryFn) {
-  const id = "retry-" + Date.now();
-  if (retryFn) window[id] = retryFn;
-  return `<div class="error-state"><p>${esc(message)}</p>${retryFn ? `<button class="btn btn-outline btn-sm" onclick="window['${id}']()" >Try again</button>` : ""}</div>`;
+  if (!retryFn) return `<div class="error-state"><p>${esc(message)}</p></div>`;
+  const id = `retry-${++_retryCounter}`;
+  _retryFns.set(id, retryFn);
+  return `<div class="error-state"><p>${esc(message)}</p><button class="btn btn-outline btn-sm" data-retry-id="${id}">Try again</button></div>`;
 }
+
+document.addEventListener("click", (e) => {
+  const btn = e.target.closest("[data-retry-id]");
+  if (!btn) return;
+  const fn = _retryFns.get(btn.dataset.retryId);
+  if (fn) {
+    _retryFns.delete(btn.dataset.retryId);
+    fn();
+  }
+});
 
 export async function api(name, opts = {}) {
   const ep = API_CONFIG.endpoints[name];

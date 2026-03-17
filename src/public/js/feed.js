@@ -21,16 +21,18 @@ export function renderCard(p, extraClass = "") {
 export async function handleArticleRoute(id) {
   if (!id) { go("home"); return; }
   setState("currentPostId", id);
-  $("#article-content").innerHTML = '<span class="loading-text">Loading...</span>';
+  const contentEl = $("#article-content");
+  if (!contentEl) return;
+  contentEl.innerHTML = '<span class="loading-text">Loading...</span>';
   const r = await api("getPost", { pathParams: { id } });
   const p = r.data?.data;
   if (!p) {
-    $("#article-content").innerHTML = `<a href="#blog" class="back">\u2190 ${esc(UI_CONFIG.labels.backToPosts)}</a><p>${esc(UI_CONFIG.labels.postNotFound)}</p>`;
+    contentEl.innerHTML = `<a href="#blog" class="back">\u2190 ${esc(UI_CONFIG.labels.backToPosts)}</a><p>${esc(UI_CONFIG.labels.postNotFound)}</p>`;
     return;
   }
 
   const tags = UI_CONFIG.features.tags
-    ? (p.tags || []).map((t) => `<span class="tag" style="background:var(--surface-3);color:var(--text-faint)">${esc(t)}</span>`).join(" ")
+    ? (p.tags || []).map((t) => `<span class="tag tag-neutral">${esc(t)}</span>`).join(" ")
     : "";
   const rt = UI_CONFIG.features.readTime ? `<span class="dot"></span><span>${readTime(p.body)}</span>` : "";
   let commentSection = "";
@@ -41,7 +43,7 @@ export async function handleArticleRoute(id) {
     commentSection = `<div class="comments"><h3>${esc(UI_CONFIG.labels.commentsTitle)}</h3>${composer}<div id="comment-list"><span class="loading-text">Loading comments...</span></div></div>`;
   }
 
-  $("#article-content").innerHTML =
+  contentEl.innerHTML =
     `<a href="#blog" class="back">\u2190 ${esc(UI_CONFIG.labels.backToPosts)}</a>` +
     "<header>" +
     `<h1 tabindex="-1">${esc(p.title)}</h1>` +
@@ -81,7 +83,9 @@ async function postComment() {
 }
 
 export function bindArticleEvents() {
-  $("#article-content").addEventListener("click", (e) => {
+  const el = $("#article-content");
+  if (!el) return;
+  el.addEventListener("click", (e) => {
     const el = e.target.closest("[data-action]");
     if (!el) return;
     e.preventDefault();

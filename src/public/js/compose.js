@@ -66,8 +66,12 @@ async function submitPost(status) {
 export function bindComposeEvents() {
   $("#btn-publish").addEventListener("click", () => submitPost("published"));
   $("#btn-draft").addEventListener("click", () => submitPost("draft"));
+  let previewTimer;
   $("#compose-body").addEventListener("input", () => {
-    const val = $("#compose-body").value;
-    $("#compose-preview").innerHTML = val ? md(val) : '<span class="placeholder-text">Start typing to see a live preview...</span>';
+    clearTimeout(previewTimer);
+    previewTimer = setTimeout(() => {
+      const val = $("#compose-body").value;
+      $("#compose-preview").innerHTML = val ? md(val) : '<span class="placeholder-text">Start typing to see a live preview...</span>';
+    }, 150);
   });
 }
