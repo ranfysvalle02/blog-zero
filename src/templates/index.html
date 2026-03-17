@@ -1,0 +1,100 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>{{ seo.title }}</title>
+  <meta name="description" content="{{ seo.description }}">
+  <meta property="og:title" content="{{ seo.title }}">
+  <meta property="og:description" content="{{ seo.description }}">
+  <meta property="og:type" content="website">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:opsz,wght@14..32,400..800&display=swap" rel="stylesheet">
+  <link rel="icon" href="/public/favicon.svg" type="image/svg+xml">
+  <link rel="stylesheet" href="/public/style.css">
+</head>
+<body>
+  <nav class="top" role="navigation" aria-label="Main navigation">
+    <div class="nav-inner">
+      <a class="brand" href="/s">
+        <img src="/public/zero-logo.png" alt="" class="brand-logo">
+        <span>blog-zero</span>
+      </a>
+      <div class="nav-links" role="tablist" aria-label="Views">
+        <a href="/s" class="active" role="tab" aria-selected="true">Home</a>
+        <a href="/public/about.html" role="tab">About</a>
+      </div>
+      <div class="nav-right">
+        <a href="/#home" class="btn btn-outline btn-sm">Open App</a>
+      </div>
+    </div>
+  </nav>
+
+  <main class="wrap" role="main">
+    <header class="feed-header">
+      <h1>Stories from the edge of code and creativity.</h1>
+    </header>
+
+    {% if tag_stats %}
+    <div class="tag-chips" aria-label="Tags">
+      {% for tag in tag_stats %}
+      <span class="tag-chip">{{ tag._id }} <span class="tag-count">{{ tag.count }}</span></span>
+      {% endfor %}
+    </div>
+    {% endif %}
+
+    {% if posts %}
+    <div class="feed" role="feed" aria-label="Posts">
+      {% for p in posts %}
+      <a href="/s/posts/{{ p._id }}" class="card" role="article">
+        <div class="meta">
+          <span>{{ p.author or "Anonymous" }}</span>
+          <span class="dot"></span>
+          <span>{{ p.created_at[:10] if p.created_at else "" }}</span>
+          {% if p.comment_count is defined %}
+          <span class="dot"></span>
+          <span>{{ p.comment_count }} comment{{ "s" if p.comment_count != 1 else "" }}</span>
+          {% endif %}
+        </div>
+        <h2>{{ p.title }}</h2>
+        <div class="excerpt">{{ (p.body or "")[:210] | replace("#", "") | replace("*", "") | replace("`", "") | truncate(210) }}</div>
+        {% if p.tags %}
+        <div class="tags">
+          {% for t in p.tags %}<span>{{ t }}</span>{% endfor %}
+        </div>
+        {% endif %}
+      </a>
+      {% endfor %}
+    </div>
+
+    {% if posts_pagination %}
+    <nav class="cta-block" aria-label="Pagination">
+      {% if posts_pagination.page > 1 %}
+      <a href="/s?page={{ posts_pagination.page - 1 }}" class="btn btn-outline">&larr; Newer</a>
+      {% endif %}
+      <span class="text-muted">
+        Page {{ posts_pagination.page }} of {{ posts_pagination.total_pages }}
+        ({{ posts_pagination.total }} post{{ "s" if posts_pagination.total != 1 else "" }})
+      </span>
+      {% if posts_pagination.page < posts_pagination.total_pages %}
+      <a href="/s?page={{ posts_pagination.page + 1 }}" class="btn btn-outline">Older &rarr;</a>
+      {% endif %}
+    </nav>
+    {% endif %}
+
+    {% else %}
+    <div class="feed-empty"><p>No published posts yet.</p></div>
+    {% endif %}
+  </main>
+
+  <footer class="site-footer">
+    <span>Powered by blog-zero</span>
+    <nav class="footer-links">
+      <a href="https://github.com/ranfysvalle02/blog-zero" target="_blank" rel="noopener noreferrer">GitHub</a>
+      <span class="footer-dot"></span>
+      <a href="https://pypi.org/project/mdb-engine/" target="_blank" rel="noopener noreferrer">PyPI</a>
+    </nav>
+  </footer>
+</body>
+</html>

@@ -18,6 +18,7 @@ docker compose up --build
 ```
 
 Open **http://localhost:8000** — your blog is live.
+SSR preview at **http://localhost:8000/s** — crawlable, SEO-ready pages.
 
 **Default admin:** `admin@example.com` / `admin123`
 
@@ -26,61 +27,98 @@ Open **http://localhost:8000** — your blog is live.
 - **Landing page** with animated hero slideshow and recent posts grid
 - **Blog browser** with search, tag filtering, and sort
 - **About page** — standalone static page (`/public/about.html`)
+- **Community guidelines** — standalone page (`/public/community.html`)
 - **Markdown editor** with live split-pane preview (powered by [marked](https://github.com/markedjs/marked) + [DOMPurify](https://github.com/cure53/DOMPurify))
 - **User registration** and authenticated comments
 - **Comment moderation** with admin approval workflow
 - **Admin dashboard** — write, manage, trash/restore, audit log
 - **SEO** — dynamic meta tags, Open Graph, JSON-LD structured data
+- **SSR pages** — server-rendered home and article views for crawlers (`/s`, `/s/posts/{id}`)
+- **Auto-generated sitemap** at `/sitemap.xml`
 - **Hero slideshow** — GSAP-powered Ken Burns transitions with nav controls
 - **Dark / Light mode** with toggle switch
 - **Responsive** — hamburger nav on mobile
 
+### What's New in 0.8.7
+
+- **SSR templates** — Jinja2-rendered pages for crawlers and social previews (`/s`, `/s/posts/{id}`)
+- **Dual frontend** — SPA at `/#home` for interactive/admin, SSR at `/s` for SEO/crawlers
+- **Role hierarchy** with per-role writable fields
+- **Conditional hooks** and atomic hook operators
+- **Cascade deletes** and referential integrity
+- **Tag validation** and a dedicated tags collection
+- **Cache directives** for fine-grained HTTP caching
+- **Scheduled jobs** defined in the manifest
+- **Managed indexes** — engine auto-creates MongoDB indexes from manifest
+- **Notifications collection** for in-app alerts
+- **CLI tools** — `mdb-engine diff`, `mdb-engine dry-run`, `mdb-engine codegen`
+
 ## Architecture
 
 Everything is defined in [`src/manifest.json`](src/manifest.json). The engine
-([mdb-engine](https://pypi.org/project/mdb-engine/)) reads it and generates:
+([mdb-engine >=0.8.7](https://pypi.org/project/mdb-engine/)) reads it and generates:
 
 - REST API with auth, CRUD, scopes, and hooks
-- MongoDB storage with validation and indexes
-- Static file serving for the frontend
+- MongoDB storage with validation, managed indexes, and referential integrity
+- SSR pages via Jinja2 templates in `src/templates/`
+- Static file serving for the SPA frontend
 
-The frontend is vanilla ES modules in `src/public/` — no build step, no bundler.
+The SPA frontend is vanilla ES modules in `src/public/` — no build step, no bundler.
+The SSR frontend uses Jinja2 templates in `src/templates/` for crawlable, SEO-optimized pages.
 
 ```
 src/
-├── manifest.json          # the entire backend
-├── Dockerfile             # cloud-ready container
-├── docker-compose.yml     # one-command local setup
-├── .env.example           # available env vars
+├── manifest.json
+├── Dockerfile
+├── docker-compose.yml
+├── .env.example
+├── templates/
+│   ├── index.html         # SSR home (server-rendered for crawlers)
+│   ├── post.html          # SSR article (JSON-LD, OG tags)
+│   ├── 404.html           # custom not-found
+│   └── 500.html           # custom server error
 └── public/
-    ├── index.html         # SPA shell
+    ├── index.html         # SPA shell (hash-routed)
     ├── about.html         # standalone about page
-    ├── zero-logo.png      # brand logo
-    ├── style.css          # all styles (Inter font, dark/light themes)
-    ├── favicon.svg        # browser tab icon
+    ├── community.html     # community guidelines
+    ├── style.css
+    ├── favicon.svg
     └── js/
-        ├── app.js         # boot + hash router + theme toggle + hamburger
-        ├── home.js        # landing page (hero + recent posts)
-        ├── blog.js        # browse, search, tag filter
-        ├── feed.js        # article view + comments
-        ├── compose.js     # markdown post editor
-        ├── manage.js      # admin dashboard
-        ├── hero.js        # GSAP slideshow with Ken Burns effect
-        ├── auth.js        # auth modal + session management
-        ├── seo.js         # dynamic meta/OG/JSON-LD
-        └── utils.js       # config, API adapter, markdown, helpers
+        ├── app.js
+        ├── home.js
+        ├── blog.js
+        ├── feed.js
+        ├── compose.js
+        ├── manage.js
+        ├── hero.js
+        ├── auth.js
+        ├── seo.js
+        ├── page-shell.js
+        └── utils.js
 ```
 
 ## Routes
 
 | Route | View |
 |-------|------|
-| `#home` | Landing page with hero slideshow + recent posts grid |
-| `#blog` | Browse all posts with search, tag chips, sort |
-| `#article/:id` | Single post with comments |
+| `/#home` | Landing page with hero slideshow + recent posts grid |
+| `/#blog` | Browse all posts with search, tag chips, sort |
+| `/#article/:id` | Single post with comments |
 | `/public/about.html` | Static about page |
-| `#compose` | Markdown editor (admin only) |
-| `#manage` | Admin dashboard (admin only) |
+| `/public/community.html` | Community guidelines & terms |
+| `/#compose` | Markdown editor (admin only) |
+| `/#manage` | Admin dashboard (admin only) |
+| `/s` | SSR home (crawlers, SEO) |
+| `/s/posts/{id}` | SSR article (crawlers, SEO, JSON-LD) |
+| `/sitemap.xml` | Auto-generated sitemap |
+
+## CLI Tools
+
+```bash
+mdb-engine diff manifest.json      # show what changed since last deploy
+mdb-engine dry-run manifest.json   # validate without applying
+mdb-engine codegen manifest.json   # generate client SDK stubs
+```
 
 ## Customization
 
@@ -121,7 +159,7 @@ at the `src/` directory and set these env vars:
 ### Run Locally (no Docker)
 
 ```bash
-pip install mdb-engine uvicorn
+pip install "mdb-engine>=0.8.7" uvicorn httpx jinja2
 ADMIN_EMAIL=admin@example.com ADMIN_PASSWORD=admin123 \
   mdb-engine serve manifest.json --reload
 ```

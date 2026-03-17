@@ -50,13 +50,13 @@
   function buildDrawer() {
     var isLight = document.documentElement.getAttribute("data-theme") === "light";
     var links = [
-      { label: "Home", href: "/" },
+      { label: "Home", href: "/#home" },
       { label: "Blog", href: "/#blog" },
       { label: "About", href: "/public/about.html" },
     ];
     drawer.innerHTML =
       '<div class="drawer-header">' +
-      '<a class="drawer-brand" href="/"><img src="/public/zero-logo.png" alt="">blog-zero</a>' +
+      '<a class="drawer-brand" href="/#home"><img src="/public/zero-logo.png" alt="">blog-zero</a>' +
       '<button class="drawer-close" aria-label="Close menu">&times;</button></div>' +
       '<nav class="drawer-nav">' +
       links.map(function (l) {

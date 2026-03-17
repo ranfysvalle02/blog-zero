@@ -4,6 +4,10 @@ A practical guide to reshaping the blog through manifest changes and frontend
 tweaks. Every recipe here works without writing Python -- just edit
 `manifest.json` and `public/index.html`.
 
+> **Updated for mdb-engine 0.8.7** — includes role hierarchy, per-role
+> writable fields, conditional hooks, `$inc` counters, cascade deletes,
+> cache directives, SSR routes, and scheduled jobs.
+
 ---
 
 ## Table of Contents
@@ -15,10 +19,14 @@ tweaks. Every recipe here works without writing Python -- just edit
 5. [New Collections](#5-new-collections)
 6. [Pipeline Recipes](#6-pipeline-recipes)
 7. [Hook Recipes](#7-hook-recipes)
-8. [UI/UX Customization](#8-uiux-customization)
-9. [Appendix A — Manifest Diff Recipes](#appendix-a--manifest-diff-recipes)
-10. [Appendix B — CSS Variable Reference](#appendix-b--css-variable-reference)
-11. [Appendix C — Frontend Extension Patterns](#appendix-c--frontend-extension-patterns)
+8. [Cascade Delete Recipes](#8-cascade-delete-recipes)
+9. [Cache Directive Recipes](#9-cache-directive-recipes)
+10. [SSR Recipes](#10-ssr-recipes)
+11. [Scheduled Job Recipes](#11-scheduled-job-recipes)
+12. [UI/UX Customization](#12-uiux-customization)
+13. [Appendix A — Manifest Diff Recipes](#appendix-a--manifest-diff-recipes)
+14. [Appendix B — CSS Variable Reference](#appendix-b--css-variable-reference)
+15. [Appendix C — Frontend Extension Patterns](#appendix-c--frontend-extension-patterns)
 
 ---
 
@@ -55,12 +63,13 @@ authentication automatically.
 
 ```json
 "posts": {
-  "auth": { "write_roles": ["admin"] }
+  "auth": { "write_roles": ["editor"] }
 }
 ```
 
 Without `"public_read": true`, anonymous visitors get `401` on
-`GET /api/posts`. They must register and log in first.
+`GET /api/posts`. They must register and log in first. With `role_hierarchy`,
+admin inherits the editor write permission automatically.
 
 **Frontend change:** The feed loader should catch 401 and show a login prompt
 instead of an empty feed:
@@ -97,7 +106,10 @@ Add a `visibility` field to posts and use scopes to filter by audience.
       }
     }
   },
-  "writable_fields": ["title", "body", "author", "status", "tags", "visibility"],
+  "writable_fields": {
+    "editor": ["title", "body", "author", "status", "tags", "visibility"],
+    "moderator": ["status", "tags"]
+  },
   "defaults": {
     "visibility": "public"
   }
@@ -116,7 +128,7 @@ Add a `visibility` field to posts and use scopes to filter by audience.
   },
   "premium_feed": {
     "filter": { "status": "published" },
-    "auth": { "roles": ["premium", "admin"] }
+    "auth": { "roles": ["premium"] }
   }
 }
 ```
@@ -126,6 +138,7 @@ Add a `visibility` field to posts and use scopes to filter by audience.
 - Anonymous visitors: `GET /api/posts?scope=public_feed` -- sees only public posts
 - Logged-in members: `GET /api/posts?scope=members_feed` -- sees public + members posts
 - Premium subscribers: `GET /api/posts?scope=premium_feed` -- sees everything
+- Admin inherits premium via `role_hierarchy` — no need to list both
 
 The scope's `auth` block enforces this server-side. A non-premium user who
 manually types `?scope=premium_feed` gets `403`.
@@ -211,7 +224,10 @@ Add a `publish_at` field. Use a scope with `$$NOW` to filter:
       "publish_at": { "type": "string", "format": "date-time" }
     }
   },
-  "writable_fields": ["title", "body", "author", "status", "tags", "publish_at"],
+  "writable_fields": {
+    "editor": ["title", "body", "author", "status", "tags", "publish_at"],
+    "moderator": ["status", "tags"]
+  },
   "scopes": {
     "live": {
       "status": "published",
@@ -222,7 +238,7 @@ Add a `publish_at` field. Use a scope with `$$NOW` to filter:
     },
     "scheduled": {
       "filter": { "status": "published", "publish_at": { "$gt": "$$NOW" } },
-      "auth": { "roles": ["admin"] }
+      "auth": { "roles": ["editor"] }
     }
   }
 }
@@ -230,7 +246,7 @@ Add a `publish_at` field. Use a scope with `$$NOW` to filter:
 
 - `?scope=live` -- public feed, only shows posts whose `publish_at` is in the
   past (or unset)
-- `?scope=scheduled` -- admin-only, shows future-dated posts
+- `?scope=scheduled` -- editor/admin only, shows future-dated posts
 
 The admin creates a post with `"status": "published", "publish_at": "2025-12-25T00:00:00Z"`.
 It appears in the public feed only after Christmas.
@@ -246,7 +262,10 @@ Add a boolean `featured` field:
       "featured": { "type": "boolean" }
     }
   },
-  "writable_fields": ["title", "body", "author", "status", "tags", "featured"],
+  "writable_fields": {
+    "editor": ["title", "body", "author", "status", "tags", "featured"],
+    "moderator": ["status", "tags"]
+  },
   "defaults": {
     "featured": false
   },
@@ -327,10 +346,10 @@ document, the frontend can compare.
 
 ## 3. Role Engineering
 
-The default blog uses two roles: `reader` and `admin`. The manifest supports
-any number of custom roles.
+The default blog uses `role_hierarchy` to define a four-role system where
+admin automatically inherits the permissions of every role beneath it.
 
-### Multi-Role System
+### Role Hierarchy (0.8.7)
 
 ```json
 "auth": {
@@ -338,6 +357,11 @@ any number of custom roles.
     "enabled": true,
     "allow_registration": true,
     "registration_role": "reader",
+    "role_hierarchy": {
+      "admin": ["editor", "moderator", "reader"],
+      "editor": ["reader"],
+      "moderator": ["reader"]
+    },
     "demo_users": [
       { "email": "{{env.ADMIN_EMAIL}}", "password": "{{env.ADMIN_PASSWORD}}", "role": "admin" },
       { "email": "{{env.EDITOR_EMAIL}}", "password": "{{env.EDITOR_PASSWORD}}", "role": "editor" }
@@ -346,18 +370,24 @@ any number of custom roles.
 }
 ```
 
+**What this means:** When a collection declares `"write_roles": ["editor"]`,
+admin inherits that permission through the hierarchy. You no longer need to
+list `["editor", "admin"]` everywhere — just `["editor"]`.
+
 #### Role: Editor (Can Write Posts, Cannot Manage)
 
 ```json
 "posts": {
   "auth": {
     "public_read": true,
-    "write_roles": ["editor", "admin"]
+    "write_roles": ["editor"]
   }
 }
 ```
 
-Editors can create and edit posts. Only admins can delete or manage comments.
+Editors can create and edit posts. Admin inherits editor, so admins can too.
+Only admins can delete or manage comments (because `role_hierarchy` gives admin
+the moderator role, not editors).
 
 #### Role: Moderator (Can Approve Comments, Cannot Write Posts)
 
@@ -366,33 +396,49 @@ Editors can create and edit posts. Only admins can delete or manage comments.
   "auth": {
     "public_read": true,
     "create_required": true,
-    "write_roles": ["moderator", "admin"]
+    "write_roles": ["moderator"]
   },
   "scopes": {
     "pending": {
       "filter": { "approved": false },
-      "auth": { "roles": ["moderator", "admin"] }
+      "auth": { "roles": ["moderator"] }
     }
   }
 }
 ```
 
+With `role_hierarchy`, admin inherits moderator — so admins can also approve
+comments and view the pending scope. No need to duplicate `["moderator", "admin"]`.
+
 #### Role: Premium (Can Read Members-Only Content)
 
 See the [Mixed Visibility recipe](#recipe-mixed-visibility-public--members-only-posts)
-above. The `premium` role gates access to a scope.
+above. The `premium` role gates access to a scope. To include premium in the
+hierarchy, extend the config:
+
+```json
+"role_hierarchy": {
+  "admin": ["editor", "moderator", "premium", "reader"],
+  "editor": ["reader"],
+  "moderator": ["reader"],
+  "premium": ["reader"]
+}
+```
 
 #### Role Hierarchy Table
 
 | Capability | reader | editor | moderator | premium | admin |
 |---|---|---|---|---|---|
 | Read public posts | Yes | Yes | Yes | Yes | Yes |
-| Read members posts | No | Yes | No | Yes | Yes |
+| Read members posts | No | Yes | No | Yes | **Yes** *(inherits)* |
 | Comment | Yes | Yes | Yes | Yes | Yes |
-| Write posts | No | Yes | No | No | Yes |
-| Approve comments | No | No | Yes | No | Yes |
+| Write posts | No | Yes | No | No | **Yes** *(inherits editor)* |
+| Approve comments | No | No | Yes | No | **Yes** *(inherits moderator)* |
 | Delete posts | No | No | No | No | Yes |
 | View audit log | No | No | No | No | Yes |
+
+Cells marked *(inherits)* are granted automatically through `role_hierarchy` --
+no per-collection config needed.
 
 **Seed all roles via demo_users:**
 
@@ -457,7 +503,10 @@ Extend the posts schema to support richer content without changing any code.
       "cover_alt": { "type": "string" }
     }
   },
-  "writable_fields": ["title", "body", "author", "status", "tags", "cover_image", "cover_alt"]
+  "writable_fields": {
+    "editor": ["title", "body", "author", "status", "tags", "cover_image", "cover_alt"],
+    "moderator": ["status", "tags"]
+  }
 }
 ```
 
@@ -491,7 +540,10 @@ h += `<div class="card" onclick="openPost('${p._id}')">${cover}<div class="meta"
       "excerpt": { "type": "string", "maxLength": 300 }
     }
   },
-  "writable_fields": ["title", "body", "author", "status", "tags", "excerpt"]
+  "writable_fields": {
+    "editor": ["title", "body", "author", "status", "tags", "excerpt"],
+    "moderator": ["status", "tags"]
+  }
 }
 ```
 
@@ -529,16 +581,22 @@ GET /api/posts?scope=published&computed=word_count,comment_count
 
 ### Add Category Linking
 
-Connect posts to the existing categories collection:
+Connect posts to the existing categories collection with referential integrity:
 
 ```json
 "posts": {
   "schema": {
     "properties": {
-      "category_id": { "type": "string" }
+      "category_id": {
+        "type": "string",
+        "x-references": { "collection": "categories", "field": "_id" }
+      }
     }
   },
-  "writable_fields": ["title", "body", "author", "status", "tags", "category_id"],
+  "writable_fields": {
+    "editor": ["title", "body", "author", "status", "tags", "category_id"],
+    "moderator": ["status", "tags"]
+  },
   "relations": {
     "category": {
       "from": "categories",
@@ -550,11 +608,44 @@ Connect posts to the existing categories collection:
 }
 ```
 
+`x-references` tells the engine to validate that the given `category_id`
+actually exists in the `categories` collection before accepting a write. If
+you POST a post with a non-existent category, you get `400 Bad Request`.
+
 ```bash
 GET /api/posts?scope=published&populate=category
 ```
 
 Each post now includes `"category": {"_id": "...", "name": "Technology"}`.
+
+### Tag Validation with `x-values-from`
+
+The blog ships with a `tags` collection. Use `x-values-from` to constrain the
+tags array to only values that exist in that collection:
+
+```json
+"posts": {
+  "schema": {
+    "properties": {
+      "tags": {
+        "type": "array",
+        "items": { "type": "string" },
+        "x-values-from": { "collection": "tags", "field": "name" }
+      }
+    }
+  }
+}
+```
+
+If you POST a post with `"tags": ["python", "nosuchvalue"]`, the engine rejects
+it because `"nosuchvalue"` doesn't exist in the tags collection. Seed your tags
+first:
+
+```bash
+curl -b cookies -X POST http://localhost:8000/api/tags \
+  -H "Content-Type: application/json" \
+  -d '{"name": "python"}'
+```
 
 ### Add a Series / Collection Field
 
@@ -596,6 +687,11 @@ GET /api/posts?scope=published&series=Getting+Started&sort=series_order
 
 Add entire new capabilities by declaring new collections.
 
+> **Note:** The blog already ships with `tags` and `notifications` collections
+> in 0.8.7. Tags are used by `x-values-from` for validated tagging.
+> Notifications are populated by conditional hooks on publish transitions.
+> See `manifest.json` for their schemas.
+
 ### Reactions (Likes / Emojis)
 
 ```json
@@ -606,7 +702,10 @@ Add entire new capabilities by declaring new collections.
   "schema": {
     "type": "object",
     "properties": {
-      "post_id": { "type": "string" },
+      "post_id": {
+        "type": "string",
+        "x-references": { "collection": "posts", "field": "_id" }
+      },
       "user_id": { "type": "string" },
       "type":    { "type": "string", "enum": ["like", "love", "fire", "think"] }
     },
@@ -627,6 +726,9 @@ Add entire new capabilities by declaring new collections.
   }
 }
 ```
+
+`x-references` on `post_id` ensures you can't react to a post that doesn't
+exist.
 
 ```bash
 # React to a post
@@ -653,7 +755,10 @@ curl http://localhost:8000/api/reactions/_agg/by_post
   "schema": {
     "type": "object",
     "properties": {
-      "post_id": { "type": "string" },
+      "post_id": {
+        "type": "string",
+        "x-references": { "collection": "posts", "field": "_id" }
+      },
       "user_id": { "type": "string" },
       "note":    { "type": "string" }
     },
@@ -674,6 +779,7 @@ curl http://localhost:8000/api/reactions/_agg/by_post
 ```
 
 Each user can only see and manage their own bookmarks (enforced by `policy`).
+`x-references` prevents bookmarking a deleted or non-existent post.
 
 ```bash
 # Save a post
@@ -874,30 +980,95 @@ GET /api/posts/_agg/archive
 
 ## 7. Hook Recipes
 
-Hooks fire after write operations. Use them for side effects beyond audit
-logging.
+Hooks fire after write operations. Use them for side effects -- audit logging,
+cross-collection updates, notifications, and external integrations. In 0.8.7,
+hooks support conditional execution (`if`), atomic updates (`$inc`), delete
+actions, HTTP webhooks, retry policies, and transactional guarantees.
 
-### Cross-Collection Counters
+### Recipe: Cross-Collection Counters with `$inc`
 
-Maintain a denormalized comment count on posts via hooks:
+Maintain a denormalized `comment_count` on posts. When a comment is approved,
+increment the counter atomically; when un-approved, decrement it.
 
 ```json
 "comments": {
   "hooks": {
-    "after_create": [
+    "after_update": [
       {
-        "action": "insert",
-        "collection": "audit_log",
-        "document": { "event": "comment_created", "entity_id": "{{doc._id}}", "actor": "{{user.email}}", "timestamp": "$$NOW" }
+        "action": "update",
+        "collection": "posts",
+        "filter": { "_id": "{{doc.post_id}}" },
+        "update": { "$inc": { "comment_count": 1 } },
+        "if": { "doc.approved": true, "prev.approved": false }
+      },
+      {
+        "action": "update",
+        "collection": "posts",
+        "filter": { "_id": "{{doc.post_id}}" },
+        "update": { "$inc": { "comment_count": -1 } },
+        "if": { "doc.approved": false, "prev.approved": true }
       }
     ]
   }
 }
 ```
 
-### Activity Feed
+**How it works:**
 
-Create an `activity` collection populated by hooks from multiple sources:
+- `"action": "update"` runs an update operation on the target collection
+- `"$inc"` atomically increments/decrements — no race conditions
+- `"if"` checks the transition: the hook only fires when `approved` actually
+  changes, not on every update. `prev.approved` refers to the value *before*
+  the update.
+
+This replaces the need for a computed `$lookup` count on every read. The
+tradeoff: you maintain a denormalized field, but reads are instant.
+
+### Recipe: Conditional Notification on Publish
+
+Notify editors only when a post transitions from draft to published — not on
+every update:
+
+```json
+"posts": {
+  "hooks": {
+    "after_update": [
+      {
+        "action": "insert",
+        "collection": "notifications",
+        "document": {
+          "type": "post_published",
+          "message": "{{doc.title}} has been published",
+          "entity_id": "{{doc._id}}",
+          "actor": "{{user.email}}",
+          "read": false,
+          "timestamp": "$$NOW"
+        },
+        "if": {
+          "doc.status": "published",
+          "prev.status": { "$ne": "published" }
+        }
+      }
+    ]
+  }
+}
+```
+
+**The `if` block** supports any MQL comparison on `doc.*` and `prev.*`:
+
+| Pattern | Meaning |
+|---|---|
+| `"doc.status": "published"` | New value equals "published" |
+| `"prev.status": { "$ne": "published" }` | Old value was *not* "published" |
+| `"doc.featured": true` | Document is now featured |
+
+This is already in the blog's `manifest.json`. The notification lands in the
+`notifications` collection and auto-expires via TTL after 7 days.
+
+### Recipe: Activity Feed with Conditional Hooks
+
+Create an `activity` collection populated selectively — only for published
+posts, not drafts:
 
 ```json
 "activity": {
@@ -908,52 +1079,681 @@ Create an `activity` collection populated by hooks from multiple sources:
 }
 ```
 
-Add hooks to posts and comments:
+Add conditional hooks to posts and comments:
 
 ```json
 "posts": {
   "hooks": {
     "after_create": [
       { "action": "insert", "collection": "audit_log", "document": { ... } },
-      { "action": "insert", "collection": "activity", "document": {
-        "type": "new_post",
-        "title": "{{doc.title}}",
-        "author": "{{user.email}}",
-        "post_id": "{{doc._id}}",
-        "timestamp": "$$NOW"
-      }}
+      {
+        "action": "insert",
+        "collection": "activity",
+        "document": {
+          "type": "new_post",
+          "title": "{{doc.title}}",
+          "author": "{{user.email}}",
+          "post_id": "{{doc._id}}",
+          "timestamp": "$$NOW"
+        },
+        "if": { "doc.status": "published" }
+      }
+    ],
+    "after_update": [
+      {
+        "action": "insert",
+        "collection": "activity",
+        "document": {
+          "type": "post_published",
+          "title": "{{doc.title}}",
+          "author": "{{user.email}}",
+          "post_id": "{{doc._id}}",
+          "timestamp": "$$NOW"
+        },
+        "if": {
+          "doc.status": "published",
+          "prev.status": { "$ne": "published" }
+        }
+      }
     ]
   }
 },
 "comments": {
   "hooks": {
     "after_create": [
-      { "action": "insert", "collection": "audit_log", "document": { ... } },
-      { "action": "insert", "collection": "activity", "document": {
-        "type": "new_comment",
-        "author": "{{user.email}}",
-        "post_id": "{{doc.post_id}}",
-        "timestamp": "$$NOW"
-      }}
+      {
+        "action": "insert",
+        "collection": "activity",
+        "document": {
+          "type": "new_comment",
+          "author": "{{user.email}}",
+          "post_id": "{{doc.post_id}}",
+          "timestamp": "$$NOW"
+        }
+      }
     ]
   }
 }
 ```
 
+Draft creation doesn't pollute the activity feed. Only publishes and comments
+appear.
+
 ```bash
 GET /api/activity?sort=-timestamp&limit=20
 ```
 
-A unified feed of all blog activity.
+### Recipe: Cascade Delete via Hooks
+
+If you prefer explicit control over what happens when a post is deleted (instead
+of using the `cascade` config), use a `delete` hook action:
+
+```json
+"posts": {
+  "hooks": {
+    "after_delete": [
+      {
+        "action": "delete",
+        "collection": "comments",
+        "filter": { "post_id": "{{doc._id}}" }
+      },
+      {
+        "action": "delete",
+        "collection": "reactions",
+        "filter": { "post_id": "{{doc._id}}" }
+      },
+      {
+        "action": "insert",
+        "collection": "audit_log",
+        "document": {
+          "event": "post_deleted",
+          "entity": "posts",
+          "entity_id": "{{doc._id}}",
+          "actor": "{{user.email}}",
+          "timestamp": "$$NOW"
+        }
+      }
+    ]
+  }
+}
+```
+
+This deletes all comments and reactions when a post is deleted. Unlike the
+`cascade` config (Section 8), hook-based cascades give you more control —
+you can mix deletes with audit inserts, add conditions, or target collections
+that `cascade` doesn't cover.
+
+**When to use hooks vs `cascade`:** Use `cascade` (Section 8) for simple
+parent→child cleanup. Use hooks when you need conditional logic, audit trails,
+or cross-cutting concerns alongside the delete.
+
+### Recipe: HTTP Webhook (Slack Notification)
+
+Post a message to Slack when a new post is published:
+
+```json
+"posts": {
+  "hooks": {
+    "after_update": [
+      {
+        "action": "http",
+        "method": "POST",
+        "url": "{{env.SLACK_WEBHOOK_URL}}",
+        "headers": { "Content-Type": "application/json" },
+        "body": {
+          "text": "New post published: *{{doc.title}}* by {{user.email}}"
+        },
+        "if": {
+          "doc.status": "published",
+          "prev.status": { "$ne": "published" }
+        }
+      }
+    ]
+  }
+}
+```
+
+Set `SLACK_WEBHOOK_URL` in your `.env`:
+
+```bash
+SLACK_WEBHOOK_URL=https://hooks.slack.com/services/T00/B00/xxxx
+```
+
+The `http` action fires asynchronously — it never blocks the API response. If
+the webhook fails, the post is still saved. Use `retry` (below) for
+reliability.
+
+### Recipe: Background Hook with Retry (SendGrid Email)
+
+Send a welcome email to new subscribers via SendGrid, with retry on failure:
+
+```json
+"subscribers": {
+  "hooks": {
+    "after_create": [
+      {
+        "action": "http",
+        "method": "POST",
+        "url": "https://api.sendgrid.com/v3/mail/send",
+        "headers": {
+          "Authorization": "Bearer {{env.SENDGRID_API_KEY}}",
+          "Content-Type": "application/json"
+        },
+        "body": {
+          "personalizations": [{ "to": [{ "email": "{{doc.email}}" }] }],
+          "from": { "email": "noreply@yourblog.com" },
+          "subject": "Welcome to the blog!",
+          "content": [{ "type": "text/plain", "value": "Thanks for subscribing, {{doc.name}}!" }]
+        },
+        "retry": { "attempts": 3, "backoff": "exponential" }
+      }
+    ]
+  }
+}
+```
+
+`retry` ensures transient failures (network blips, 429 rate limits) don't
+silently lose the email. The engine retries up to 3 times with exponential
+backoff (1s → 2s → 4s).
+
+### Recipe: Transactional Hooks (Audit-Critical Writes)
+
+For audit-critical operations where the hook *must* succeed or the write should
+roll back, use `transactional: true`:
+
+```json
+"posts": {
+  "hooks": {
+    "after_create": [
+      {
+        "action": "insert",
+        "collection": "audit_log",
+        "document": {
+          "event": "post_created",
+          "entity": "posts",
+          "entity_id": "{{doc._id}}",
+          "actor": "{{user.email}}",
+          "title": "{{doc.title}}",
+          "timestamp": "$$NOW"
+        },
+        "transactional": true
+      }
+    ]
+  }
+}
+```
+
+With `transactional: true`, the engine wraps the original write and the hook
+in a MongoDB transaction. If the audit insert fails, the post creation is
+rolled back. Use this sparingly — transactions add latency and require a
+replica set.
+
+**Default behavior (without `transactional`):** Hooks are fire-and-forget.
+A hook failure is logged but never blocks the API response.
 
 ---
 
-## 8. UI/UX Customization
+## 8. Cascade Delete Recipes
+
+When a parent document is deleted, cascade rules automatically clean up child
+documents. The blog uses this to delete comments when a post is removed.
+
+### `cascade.on_delete`
+
+Hard-delete child documents when the parent is hard-deleted:
+
+```json
+"posts": {
+  "cascade": {
+    "on_delete": [
+      { "collection": "comments",  "match_field": "post_id", "action": "delete" },
+      { "collection": "reactions", "match_field": "post_id", "action": "delete" }
+    ]
+  }
+}
+```
+
+When `DELETE /api/posts/{id}` fires, the engine automatically deletes all
+comments and reactions whose `post_id` matches the deleted post's `_id`.
+
+### `cascade.on_soft_delete`
+
+Soft-delete child documents when the parent is soft-deleted:
+
+```json
+"posts": {
+  "soft_delete": true,
+  "cascade": {
+    "on_delete": [
+      { "collection": "comments", "match_field": "post_id", "action": "delete" }
+    ],
+    "on_soft_delete": [
+      { "collection": "comments", "match_field": "post_id", "action": "soft_delete" }
+    ]
+  }
+}
+```
+
+| Operation | What Happens to Children |
+|---|---|
+| Hard delete (`DELETE` with `?permanent=true`) | Comments hard-deleted via `on_delete` |
+| Soft delete (`DELETE` default) | Comments soft-deleted via `on_soft_delete` |
+| Restore (`POST /{id}/_restore`) | Does **not** auto-restore children |
+
+### Cascade + Soft Delete Interaction
+
+The blog's posts collection uses both:
+
+```json
+"posts": {
+  "soft_delete": true,
+  "cascade": {
+    "on_delete": [
+      { "collection": "comments", "match_field": "post_id", "action": "delete" }
+    ],
+    "on_soft_delete": [
+      { "collection": "comments", "match_field": "post_id", "action": "soft_delete" }
+    ]
+  }
+}
+```
+
+When an admin soft-deletes a post, its comments are also soft-deleted. Both
+appear in their respective `_trash` endpoints:
+
+```bash
+# Soft-deleted posts
+GET /api/posts/_trash
+
+# Soft-deleted comments
+GET /api/comments/_trash
+```
+
+To restore the post *and* its comments, restore them separately:
+
+```bash
+POST /api/posts/<post_id>/_restore
+# Then restore the orphaned comments:
+# (comments don't auto-restore — you need to handle them)
+```
+
+### Multi-Level Cascade
+
+Chain cascades for deeper hierarchies. If you add reactions to comments:
+
+```json
+"comments": {
+  "cascade": {
+    "on_delete": [
+      { "collection": "comment_reactions", "match_field": "comment_id", "action": "delete" }
+    ]
+  }
+}
+```
+
+Deleting a post → deletes comments → deletes comment reactions. The engine
+processes cascades recursively.
+
+---
+
+## 9. Cache Directive Recipes
+
+The blog uses per-scope caching to speed up public reads while keeping admin
+views fresh.
+
+### Per-Scope Caching
+
+```json
+"posts": {
+  "cache": {
+    "scope:published": { "ttl": "5m", "stale_while_revalidate": "30s" },
+    "default": { "ttl": "0s" }
+  }
+}
+```
+
+| Key | Meaning |
+|---|---|
+| `scope:published` | Cache responses for `?scope=published` for 5 minutes |
+| `stale_while_revalidate` | Serve stale data for 30s while refreshing in background |
+| `default` | All other queries (drafts, admin views) bypass cache |
+
+The published feed loads instantly for readers. Admin views always show live
+data.
+
+### Aggressive Caching for High-Traffic Blogs
+
+Increase TTL and add cache rules for pipelines:
+
+```json
+"posts": {
+  "cache": {
+    "scope:published": { "ttl": "15m", "stale_while_revalidate": "2m" },
+    "scope:featured":  { "ttl": "10m", "stale_while_revalidate": "1m" },
+    "pipeline:tag_cloud": { "ttl": "30m" },
+    "pipeline:archive":   { "ttl": "1h" },
+    "default": { "ttl": "0s" }
+  }
+}
+```
+
+Tag clouds and archives change rarely — cache them for 30 minutes to an hour.
+
+### Bypassing Cache for Admin Queries
+
+The `default` key with `"ttl": "0s"` ensures non-scoped queries (admin panel,
+draft views) always hit the database. You can also scope admin views explicitly:
+
+```json
+"posts": {
+  "cache": {
+    "scope:published": { "ttl": "5m", "stale_while_revalidate": "30s" },
+    "scope:drafts":    { "ttl": "0s" },
+    "scope:archived":  { "ttl": "0s" },
+    "default":         { "ttl": "0s" }
+  }
+}
+```
+
+Admins editing drafts always see the latest version. Readers browsing the
+published feed get the cached version.
+
+### Cache for Static Collections
+
+Collections that change rarely benefit from longer TTLs:
+
+```json
+"categories": {
+  "cache": {
+    "default": { "ttl": "1h", "stale_while_revalidate": "5m" }
+  }
+},
+"tags": {
+  "cache": {
+    "default": { "ttl": "30m", "stale_while_revalidate": "2m" }
+  }
+}
+```
+
+---
+
+## 10. SSR Recipes
+
+The blog ships with server-side rendered routes for SEO. The `ssr` config in
+the manifest defines HTML templates, data bindings, and SEO metadata — all
+without writing Python.
+
+### Adding a New SSR Route
+
+Add an `/s/about` page that pulls data from a hypothetical `site_info`
+collection:
+
+```json
+"ssr": {
+  "routes": {
+    "/s/about": {
+      "template": "about.html",
+      "data": {
+        "info": {
+          "collection": "site_info",
+          "filter": { "slug": "about" },
+          "single": true
+        }
+      },
+      "seo": {
+        "title": "About — blog-zero",
+        "description": "Learn about the blog and its authors."
+      },
+      "cache": { "ttl": "1h" }
+    }
+  }
+}
+```
+
+Create `src/templates/about.html`:
+
+```html
+<div class="wrap">
+  <h1>{{ info.title }}</h1>
+  <div class="prose">{{ info.body }}</div>
+</div>
+```
+
+The engine fetches data at request time, renders the template, and returns
+full HTML — indexable by search engines.
+
+### Auth-Gated SSR Pages
+
+Restrict an SSR route to authenticated users:
+
+```json
+"ssr": {
+  "routes": {
+    "/s/dashboard": {
+      "template": "dashboard.html",
+      "auth": { "required": true, "roles": ["editor"] },
+      "data": {
+        "my_drafts": {
+          "collection": "posts",
+          "filter": { "status": "draft", "author_id": "{{user._id}}" },
+          "sort": { "updated_at": -1 },
+          "limit": 20
+        },
+        "notifications": {
+          "collection": "notifications",
+          "filter": { "read": false },
+          "sort": { "timestamp": -1 },
+          "limit": 10
+        }
+      },
+      "seo": {
+        "title": "Dashboard — blog-zero"
+      }
+    }
+  }
+}
+```
+
+Unauthenticated visitors get a redirect to the login page. The template can
+reference `{{ user.email }}` for personalization.
+
+### Custom JSON-LD for Rich Search Results
+
+The blog's post detail page already includes JSON-LD. Customize it for richer
+snippets:
+
+```json
+"/s/posts/{id}": {
+  "template": "post.html",
+  "data": {
+    "post": { "collection": "posts", "id_param": "id" },
+    "comments": {
+      "collection": "comments",
+      "filter": { "post_id": "{{params.id}}", "approved": true },
+      "sort": { "created_at": 1 },
+      "limit": 100
+    }
+  },
+  "seo": {
+    "title": "{{post.title}} — blog-zero",
+    "description": "{{post.excerpt}}",
+    "og_type": "article",
+    "json_ld": {
+      "@context": "https://schema.org",
+      "@type": "BlogPosting",
+      "headline": "{{post.title}}",
+      "datePublished": "{{post.created_at}}",
+      "dateModified": "{{post.updated_at}}",
+      "wordCount": "{{post.word_count}}",
+      "commentCount": "{{post.comment_count}}",
+      "author": {
+        "@type": "Person",
+        "name": "{{post.author}}"
+      },
+      "publisher": {
+        "@type": "Organization",
+        "name": "blog-zero",
+        "url": "https://yourblog.com"
+      }
+    }
+  },
+  "cache": { "ttl": "10m", "stale_while_revalidate": "1m" }
+}
+```
+
+Google uses JSON-LD to generate rich search cards with author, date, and
+comment count.
+
+### SSR Route for Tag-Filtered Pages
+
+Create SEO-friendly tag pages:
+
+```json
+"/s/tags/{tag}": {
+  "template": "index.html",
+  "data": {
+    "posts": {
+      "collection": "posts",
+      "filter": { "status": "published", "tags": "{{params.tag}}" },
+      "sort": { "created_at": -1 },
+      "limit": 20
+    }
+  },
+  "seo": {
+    "title": "Posts tagged '{{params.tag}}' — blog-zero",
+    "description": "All posts tagged with {{params.tag}}."
+  },
+  "cache": { "ttl": "10m" }
+}
+```
+
+```bash
+GET /s/tags/python
+# Returns server-rendered HTML of all posts tagged "python"
+```
+
+---
+
+## 11. Scheduled Job Recipes
+
+The `jobs` config runs background tasks on a cron schedule. No external
+scheduler needed — the engine handles it.
+
+### Archive Stale Drafts
+
+The blog ships with this job. Drafts untouched for 90 days are auto-archived:
+
+```json
+"jobs": {
+  "archive_stale_drafts": {
+    "schedule": "@daily",
+    "action": "update",
+    "collection": "posts",
+    "filter": {
+      "status": "draft",
+      "updated_at": { "$lt": "$$NOW_MINUS_90D" }
+    },
+    "update": { "$set": { "status": "archived" } }
+  }
+}
+```
+
+| Schedule Shorthand | Meaning |
+|---|---|
+| `@daily` | Once a day at midnight UTC |
+| `@hourly` | Once an hour at :00 |
+| `@weekly` | Once a week on Sunday at midnight UTC |
+| `"0 9 * * *"` | Standard cron syntax (9 AM UTC daily) |
+
+### Clean Up Expired Notifications
+
+The `notifications` collection has a 7-day TTL, but you can also proactively
+purge read notifications:
+
+```json
+"jobs": {
+  "cleanup_read_notifications": {
+    "schedule": "@daily",
+    "action": "delete",
+    "collection": "notifications",
+    "filter": {
+      "read": true,
+      "timestamp": { "$lt": "$$NOW_MINUS_3D" }
+    }
+  }
+}
+```
+
+Read notifications older than 3 days are deleted, reducing collection size
+between TTL sweeps.
+
+### Generate Daily Digest
+
+Insert a summary document each morning for an email digest workflow:
+
+```json
+"jobs": {
+  "daily_digest": {
+    "schedule": "0 8 * * *",
+    "action": "insert",
+    "collection": "digests",
+    "document": {
+      "type": "daily",
+      "generated_at": "$$NOW",
+      "status": "pending"
+    }
+  }
+}
+```
+
+Pair with an `http` hook on the `digests` collection to trigger an external
+email service when a new digest document appears:
+
+```json
+"digests": {
+  "auto_crud": true,
+  "read_only": true,
+  "hooks": {
+    "after_create": [
+      {
+        "action": "http",
+        "method": "POST",
+        "url": "{{env.DIGEST_WEBHOOK_URL}}",
+        "headers": { "Content-Type": "application/json" },
+        "body": { "digest_id": "{{doc._id}}", "type": "{{doc.type}}" },
+        "retry": { "attempts": 3, "backoff": "exponential" }
+      }
+    ]
+  }
+}
+```
+
+### Purge Old Page Views
+
+Keep analytics lean by removing page views older than 90 days (belt-and-suspenders
+with the TTL index):
+
+```json
+"jobs": {
+  "purge_old_views": {
+    "schedule": "@weekly",
+    "action": "delete",
+    "collection": "page_views",
+    "filter": {
+      "created_at": { "$lt": "$$NOW_MINUS_90D" }
+    }
+  }
+}
+```
+
+---
+
+## 12. UI/UX Customization
 
 The frontend is a single `public/index.html` file using CSS custom properties.
 Every visual aspect is customizable.
 
-### 8.1 Theme System (CSS Variables)
+### 12.1 Theme System (CSS Variables)
 
 The entire design is driven by CSS custom properties in `:root`. Change colors,
 fonts, spacing, and borders in one place.
@@ -1032,7 +1832,7 @@ Change `--accent` and `--accent2` for a different brand feel:
 | Red | `#ef4444` | `#fca5a5` |
 | Teal | `#14b8a6` | `#5eead4` |
 
-### 8.2 Typography
+### 12.2 Typography
 
 The blog uses three font stacks:
 
@@ -1069,7 +1869,7 @@ Add to `<head>`:
 }
 ```
 
-### 8.3 Layout Variations
+### 12.3 Layout Variations
 
 #### Wider Content Area
 
@@ -1090,7 +1890,7 @@ Add to `<head>`:
 .article header, .prose, .comments { max-width: 720px; margin: 0 auto; }
 ```
 
-### 8.4 Card Styles
+### 12.4 Card Styles
 
 #### Magazine Layout (Grid)
 
@@ -1136,7 +1936,7 @@ Replace the feed's flex layout with a grid:
 }
 ```
 
-### 8.5 Nav Customization
+### 12.5 Nav Customization
 
 #### Centered Nav
 
@@ -1169,7 +1969,7 @@ nav.top .inner { max-width: none; }
 }
 ```
 
-### 8.6 Adding a Sidebar
+### 12.6 Adding a Sidebar
 
 Wrap the feed in a two-column layout:
 
@@ -1207,7 +2007,7 @@ async function loadSidebar() {
 }
 ```
 
-### 8.7 Article View Enhancements
+### 12.7 Article View Enhancements
 
 #### Table of Contents (Auto-Generated)
 
@@ -1267,7 +2067,7 @@ Already computed client-side by the `readTime()` function. Style it:
 }
 ```
 
-### 8.8 Search (Client-Side Filtering)
+### 12.8 Search (Client-Side Filtering)
 
 Add a search input above the feed:
 
@@ -1305,7 +2105,7 @@ For server-side search, use a pipeline with `$regex`:
 }
 ```
 
-### 8.9 Infinite Scroll / Pagination
+### 12.9 Infinite Scroll / Pagination
 
 Replace the single `loadFeed()` call with paginated loading:
 
@@ -1332,7 +2132,6 @@ async function loadFeedPage(reset = false) {
     container.appendChild(card);
   });
   feedPage++;
-  // Hide "Load more" if fewer results than page size
   if (posts.length < PAGE_SIZE) $('#loadMore')?.remove();
 }
 ```
@@ -1351,7 +2150,7 @@ $('#feed').appendChild(sentinel);
 observer.observe(sentinel);
 ```
 
-### 8.10 Toast Notifications (Customizing)
+### 12.10 Toast Notifications (Customizing)
 
 Change toast position, animation, or duration:
 
@@ -1394,25 +2193,36 @@ Quick copy-paste diffs for common customizations. Apply these to the base
 
 ```diff
  "posts": {
--  "auth": { "public_read": true, "write_roles": ["admin"] },
-+  "auth": { "required": true, "write_roles": ["admin"] },
+-  "auth": { "public_read": true, "write_roles": ["editor"] },
++  "auth": { "required": true, "write_roles": ["editor"] },
  }
 ```
 
-### A.2 Add Editor Role
+### A.2 Add Editor Role (with Role Hierarchy)
 
 ```diff
- "demo_users": [
--  { "email": "{{env.ADMIN_EMAIL}}", "password": "{{env.ADMIN_PASSWORD}}", "role": "admin" }
-+  { "email": "{{env.ADMIN_EMAIL}}", "password": "{{env.ADMIN_PASSWORD}}", "role": "admin" },
-+  { "email": "{{env.EDITOR_EMAIL}}", "password": "{{env.EDITOR_PASSWORD}}", "role": "editor" }
- ]
+ "auth": {
+   "users": {
++    "role_hierarchy": {
++      "admin": ["editor", "moderator", "reader"],
++      "editor": ["reader"],
++      "moderator": ["reader"]
++    },
+     "demo_users": [
+-      { "email": "{{env.ADMIN_EMAIL}}", "password": "{{env.ADMIN_PASSWORD}}", "role": "admin" }
++      { "email": "{{env.ADMIN_EMAIL}}", "password": "{{env.ADMIN_PASSWORD}}", "role": "admin" },
++      { "email": "{{env.EDITOR_EMAIL}}", "password": "{{env.EDITOR_PASSWORD}}", "role": "editor" }
+     ]
+   }
+ }
 
  "posts": {
 -  "auth": { "public_read": true, "write_roles": ["admin"] },
-+  "auth": { "public_read": true, "write_roles": ["editor", "admin"] },
++  "auth": { "public_read": true, "write_roles": ["editor"] },
  }
 ```
+
+Admin inherits editor via `role_hierarchy` — no need to list both.
 
 ### A.3 Close Registration (Invite Only)
 
@@ -1436,8 +2246,14 @@ Quick copy-paste diffs for common customizations. Apply these to the base
        "title": { "type": "string" },
      }
    },
--  "writable_fields": ["title", "body", "author", "status", "tags"],
-+  "writable_fields": ["title", "body", "author", "status", "tags", "visibility"],
+-  "writable_fields": {
+-    "editor": ["title", "body", "author", "status", "tags"],
+-    "moderator": ["status", "tags"]
+-  },
++  "writable_fields": {
++    "editor": ["title", "body", "author", "status", "tags", "visibility"],
++    "moderator": ["status", "tags"]
++  },
    "defaults": {
      "status": "draft",
      "tags": [],
@@ -1469,7 +2285,7 @@ Quick copy-paste diffs for common customizations. Apply these to the base
 +    "schema": {
 +      "type": "object",
 +      "properties": {
-+        "post_id": { "type": "string" },
++        "post_id": { "type": "string", "x-references": { "collection": "posts", "field": "_id" } },
 +        "user_id": { "type": "string" },
 +        "type": { "type": "string", "enum": ["like", "love", "fire", "think"] }
 +      },
@@ -1492,8 +2308,14 @@ Quick copy-paste diffs for common customizations. Apply these to the base
        "title": { "type": "string" },
      }
    },
--  "writable_fields": ["title", "body", "author", "status", "tags"],
-+  "writable_fields": ["title", "body", "author", "status", "tags", "cover_image", "cover_alt"],
+-  "writable_fields": {
+-    "editor": ["title", "body", "author", "status", "tags"],
+-    "moderator": ["status", "tags"]
+-  },
++  "writable_fields": {
++    "editor": ["title", "body", "author", "status", "tags", "cover_image", "cover_alt"],
++    "moderator": ["status", "tags"]
++  },
  }
 ```
 
@@ -1507,6 +2329,75 @@ Quick copy-paste diffs for common customizations. Apply these to the base
 +    "expire_after": "365d"
    }
  }
+```
+
+### A.8 Add Cascade Delete to Posts
+
+```diff
+ "posts": {
++  "soft_delete": true,
++  "cascade": {
++    "on_delete": [
++      { "collection": "comments", "match_field": "post_id", "action": "delete" }
++    ],
++    "on_soft_delete": [
++      { "collection": "comments", "match_field": "post_id", "action": "soft_delete" }
++    ]
++  },
+ }
+```
+
+### A.9 Add Cache Directives to Posts
+
+```diff
+ "posts": {
++  "cache": {
++    "scope:published": { "ttl": "5m", "stale_while_revalidate": "30s" },
++    "default": { "ttl": "0s" }
++  },
+ }
+```
+
+### A.10 Add an SSR Route
+
+```diff
+ "ssr": {
+   "routes": {
++    "/s/tags/{tag}": {
++      "template": "index.html",
++      "data": {
++        "posts": {
++          "collection": "posts",
++          "filter": { "status": "published", "tags": "{{params.tag}}" },
++          "sort": { "created_at": -1 },
++          "limit": 20
++        }
++      },
++      "seo": {
++        "title": "Posts tagged '{{params.tag}}' — blog-zero",
++        "description": "All posts tagged with {{params.tag}}."
++      },
++      "cache": { "ttl": "10m" }
++    },
+   }
+ }
+```
+
+### A.11 Add a Scheduled Job
+
+```diff
++"jobs": {
++  "archive_stale_drafts": {
++    "schedule": "@daily",
++    "action": "update",
++    "collection": "posts",
++    "filter": {
++      "status": "draft",
++      "updated_at": { "$lt": "$$NOW_MINUS_90D" }
++    },
++    "update": { "$set": { "status": "archived" } }
++  }
++}
 ```
 
 ---
@@ -1699,4 +2590,6 @@ document.addEventListener('keydown', (e) => {
 
 *See also: [MDB_ENGINE_101.md](MDB_ENGINE_101.md) for the full framework
 reference, [BLOG_101.md](BLOG_101.md) for the blog walkthrough,
-[blog.md](blog.md) for the architecture overview.*
+[blog.md](blog.md) for the architecture overview,
+[EXEC_SUMMARY.md](EXEC_SUMMARY.md) for the executive summary,
+[LIMITS.md](LIMITS.md) for known limitations and workarounds.*

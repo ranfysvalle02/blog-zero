@@ -1,0 +1,97 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>{{ seo.title }}</title>
+  <meta name="description" content="{{ seo.description }}">
+  <meta property="og:title" content="{{ seo.title }}">
+  <meta property="og:description" content="{{ seo.description }}">
+  <meta property="og:type" content="{{ seo.og_type or 'article' }}">
+  {% if seo.json_ld %}
+  <script type="application/ld+json">{{ seo.json_ld | safe }}</script>
+  {% endif %}
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:opsz,wght@14..32,400..800&display=swap" rel="stylesheet">
+  <link rel="icon" href="/public/favicon.svg" type="image/svg+xml">
+  <link rel="stylesheet" href="/public/style.css">
+</head>
+<body>
+  <nav class="top" role="navigation" aria-label="Main navigation">
+    <div class="nav-inner">
+      <a class="brand" href="/s">
+        <img src="/public/zero-logo.png" alt="" class="brand-logo">
+        <span>blog-zero</span>
+      </a>
+      <div class="nav-links" role="tablist" aria-label="Views">
+        <a href="/s" role="tab">Home</a>
+        <a href="/public/about.html" role="tab">About</a>
+      </div>
+      <div class="nav-right">
+        <a href="/#article/{{ post._id }}" class="btn btn-outline btn-sm">Open in App</a>
+      </div>
+    </div>
+  </nav>
+
+  <main class="wrap" role="main">
+    {% if post %}
+    <article class="article">
+      <a href="/s" class="back">&larr; Back to posts</a>
+      <header>
+        <h1>{{ post.title }}</h1>
+        <div class="meta">
+          <span>{{ post.author or "Anonymous" }}</span>
+          <span class="dot"></span>
+          <span>{{ post.created_at[:10] if post.created_at else "" }}</span>
+          {% if post.tags %}
+            &nbsp;
+            {% for t in post.tags %}
+            <span class="tag tag-neutral">{{ t }}</span>
+            {% endfor %}
+          {% endif %}
+        </div>
+      </header>
+      <div class="prose">{{ post.body | default("", true) | safe }}</div>
+
+      {% if comments is defined %}
+      <div class="comments">
+        <h3>Comments ({{ comments | length }})</h3>
+        {% if comments %}
+        {% for c in comments %}
+        <div class="cmt">
+          <div class="cmt-meta">
+            <strong>{{ c.author or "Anonymous" }}</strong>
+            <span>{{ c.created_at[:10] if c.created_at else "" }}</span>
+          </div>
+          <div class="cmt-body">{{ c.body }}</div>
+        </div>
+        {% endfor %}
+        {% else %}
+        <p class="loading-text">No approved comments yet.</p>
+        {% endif %}
+        <div class="notice">
+          <a href="/#article/{{ post._id }}">Sign in to leave a comment</a>
+        </div>
+      </div>
+      {% endif %}
+    </article>
+    {% else %}
+    <div class="error-state">
+      <h1>Post not found</h1>
+      <p>The post you're looking for doesn't exist or has been removed.</p>
+      <a href="/s" class="btn btn-outline">Back to home</a>
+    </div>
+    {% endif %}
+  </main>
+
+  <footer class="site-footer">
+    <span>Powered by blog-zero</span>
+    <nav class="footer-links">
+      <a href="https://github.com/ranfysvalle02/blog-zero" target="_blank" rel="noopener noreferrer">GitHub</a>
+      <span class="footer-dot"></span>
+      <a href="https://pypi.org/project/mdb-engine/" target="_blank" rel="noopener noreferrer">PyPI</a>
+    </nav>
+  </footer>
+</body>
+</html>

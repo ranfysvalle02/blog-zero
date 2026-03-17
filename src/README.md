@@ -1,63 +1,182 @@
 # Zero-Code Blog
 
 A full-featured blog platform from a single JSON file. No backend code required.
+Now powered by **mdb-engine 0.8.7** with SSR, conditional hooks, cascade deletes,
+role hierarchies, atomic operators, scheduled jobs, and more.
 
 ```
 src/
-├── manifest.json          # the entire API -- auth, CRUD, hooks, relations, TTL
-├── Dockerfile             # cloud-ready container (Render, Railway, Fly, etc.)
+├── manifest.json          # the entire API + SSR + jobs + auth + hooks
+├── Dockerfile             # cloud-ready container
 ├── docker-compose.yml     # one-command local setup
 ├── .env.example           # available env vars
-└── public/
-    ├── index.html         # SPA shell (hash-routed)
+├── templates/             # SSR templates (Jinja2, server-rendered)
+│   ├── index.html         # home page (paginated post list, tags)
+│   ├── post.html          # article page (full post, comments, JSON-LD)
+│   ├── 404.html           # custom not-found page
+│   └── 500.html           # custom server-error page
+└── public/                # SPA + static assets
+    ├── index.html         # SPA shell (hash-routed, admin views)
     ├── about.html         # standalone about page
-    ├── style.css          # all styles (CSS custom properties for theming)
+    ├── community.html     # community guidelines
+    ├── style.css          # all styles (shared by SPA and SSR)
     ├── favicon.svg        # browser tab icon
     └── js/
         ├── app.js         # boot + hash router + SEO hook
-        ├── home.js        # landing page (hero slideshow + recent posts grid)
-        ├── blog.js        # browse/search with tag chips + sort toggle
-        ├── feed.js        # article view, comments, shared renderCard()
+        ├── home.js        # landing page (hero slideshow + recent posts)
+        ├── blog.js        # browse/search with tag chips + sort
+        ├── feed.js        # article view, comments, renderCard()
         ├── compose.js     # markdown editor with live preview
-        ├── manage.js      # admin dashboard (stats, CRUD, moderation, audit)
+        ├── manage.js      # admin dashboard (stats, CRUD, moderation)
         ├── hero.js        # crossfade slideshow with dot navigation
         ├── seo.js         # dynamic title/meta/OG/JSON-LD per route
-        └── utils.js       # BLOG_CONFIG, API_CONFIG, UI_CONFIG, api(), md(), helpers
+        └── utils.js       # BLOG_CONFIG, API_CONFIG, UI_CONFIG, api(), md()
 ```
+
+## Two frontends, one blog
+
+| Surface | Tech | Who it serves |
+|---------|------|---------------|
+| **SSR** (`/s`, `/s/posts/{id}`) | Jinja2 templates, server-rendered | Crawlers, SEO, link previews, no-JS readers |
+| **SPA** (`/#home`, `/#blog`, `/#compose`, `/#manage`) | Vanilla JS modules | Logged-in users, admin, interactive features |
+
+Both share `style.css`. SSR pages link to the SPA ("Open in App") for
+authenticated actions. The SPA handles everything the SSR can't: compose,
+manage, auth panels, live preview.
 
 ## What the manifest defines
 
-| Collection   | Features |
-|--------------|----------|
-| `posts`      | Schema validation, soft delete, defaults, scopes, pipelines, timestamps, **owner_field**, **immutable_fields**, **hooks** (audit trail), **computed** (comment count) |
-| `comments`   | Authenticated create, admin-only moderation, **owner_field**, **immutable_fields**, **relations** (`?populate=post`), **hooks** |
-| `categories` | Schema with **`x-unique`** constraint on name (409 on duplicates) |
-| `audit_log`  | Read-only, no timestamps, **TTL** (90-day auto-expiry), auto-populated via hooks |
+| Collection | 0.8.7 Features Used |
+|------------|-------------------|
+| `posts` | Schema, soft delete, defaults, scopes, pipelines, **owner_field**, **immutable_fields**, **per-role writable_fields**, hooks (audit + **conditional publish notification**), **cascade delete → comments**, **cache directives**, **x-values-from** (tag validation), relations, **managed indexes** |
+| `comments` | Auth (public read, create required, **moderator** write), **x-references** (post_id validation), **owner_field**, **immutable_fields**, relations, hooks (**atomic `$inc` comment_count** on approval toggle), soft delete |
+| `categories` | Schema with **x-unique**, public read, admin write |
+| `tags` | Schema with **x-unique**, public read, editor write, **used by x-values-from** |
+| `notifications` | Schema, defaults, scopes (unread), **TTL** (7-day auto-expiry), editor-only access, **populated by conditional hooks** |
+| `audit_log` | Read-only, **TTL** (90-day auto-expiry), populated by hooks, **`{{prev.*}}` placeholders** for tracking old/new status |
 
 Auth is configured with `auth.users`:
 
-- **Secure-by-default** -- because `auth.users.enabled` is `true`, every collection endpoint requires authentication automatically unless `public_read` is set.
-- **Public reads** -- `posts` and `comments` have `"public_read": true` so anyone can browse without signing in. Writes still require auth.
-- Admin seeded via `{{env.ADMIN_EMAIL}}` / `{{env.ADMIN_PASSWORD}}` (no plaintext secrets in the manifest)
-- Self-registered users get role `reader` (`registration_role`)
-- Post/category/comment mutation requires admin role (`write_roles`)
+- **Secure-by-default** — all endpoints require auth unless `public_read` is set
+- **Role hierarchy** — `admin > editor > reader`, `admin > moderator > reader`
+- **Per-role writable fields** — editors get full content access, moderators get status/tags only
+- Admin seeded via `{{env.ADMIN_EMAIL}}` / `{{env.ADMIN_PASSWORD}}`
+- Self-registered users get role `reader`
+- Post/tag mutation requires `editor` role; category mutation requires `admin`
+- Comment moderation requires `moderator` role (inherited by editor and admin)
 
-## What the frontend shows
+## 0.8.7 features in action
 
-**Reader views:**
-- **Home** (`#home`) -- hero slideshow (config-driven images, crossfade, dot nav) + recent posts grid + "Browse all" CTA
-- **Blog** (`#blog`) -- search bar, tag filter chips (from `_agg/by_tag` pipeline), newest/oldest sort, full post list
-- **Article** (`#article/:id`) -- single post with rendered Markdown, comments with auth-gated composer
-- **About** (`/public/about.html`) -- standalone static page, same styling
+### Conditional hooks with `{{prev.*}}`
 
-**Admin views:**
-- **Write** (`#compose`) -- Markdown editor with live split-pane preview, tag/author fields
-- **Manage** (`#manage`) -- stats dashboard, post CRUD with status management, pending comment moderation, audit log viewer
+Publish notifications only fire when a post **transitions** to published:
 
-**Cross-cutting:**
-- **Auth** -- register/login/logout with role display in nav
-- **SEO** -- dynamic `<title>`, `<meta description>`, Open Graph tags, JSON-LD (`Blog` + `BlogPosting` schemas) updated on every route change
-- **Toasts** -- non-blocking success/error/info notifications
+```json
+"after_update": [{
+  "action": "insert", "collection": "notifications",
+  "document": { "type": "post_published", "message": "{{doc.title}} has been published", ... },
+  "if": { "doc.status": "published", "prev.status": { "$ne": "published" } }
+}]
+```
+
+### Atomic `$inc` for denormalized comment count
+
+When a comment is approved, the parent post's `comment_count` is atomically
+incremented. When unapproved, it's decremented. No expensive `$lookup` on read:
+
+```json
+"after_update": [{
+  "action": "update",
+  "collection": "posts",
+  "filter": { "_id": "{{doc.post_id}}" },
+  "update": { "$inc": { "comment_count": 1 } },
+  "if": { "doc.approved": true, "prev.approved": false }
+}]
+```
+
+### Cascade delete
+
+Deleting a post automatically deletes all its comments. Soft-deleting a post
+soft-deletes its comments:
+
+```json
+"cascade": {
+  "on_delete": [{ "collection": "comments", "match_field": "post_id", "action": "delete" }],
+  "on_soft_delete": [{ "collection": "comments", "match_field": "post_id", "action": "soft_delete" }]
+}
+```
+
+### Referential integrity
+
+Comments validate that `post_id` points to a real post at write time:
+
+```json
+"post_id": { "type": "string", "x-references": { "collection": "posts", "field": "_id" } }
+```
+
+### Tag validation with `x-values-from`
+
+Post tags are validated against the `tags` collection:
+
+```json
+"tags": { "type": "array", "items": { "type": "string" }, "x-values-from": { "collection": "tags", "field": "name" } }
+```
+
+### Cache directives
+
+Published posts get 5-minute caching with stale-while-revalidate. Draft/admin
+queries bypass the cache:
+
+```json
+"cache": { "scope:published": { "ttl": "5m", "stale_while_revalidate": "30s" }, "default": { "ttl": "0s" } }
+```
+
+### Scheduled jobs
+
+Stale drafts (untouched for 90 days) are auto-archived daily:
+
+```json
+"jobs": {
+  "archive_stale_drafts": {
+    "schedule": "@daily",
+    "action": "update",
+    "collection": "posts",
+    "filter": { "status": "draft", "updated_at": { "$lt": "$$NOW_MINUS_90D" } },
+    "update": { "$set": { "status": "archived" } }
+  }
+}
+```
+
+### Server-side rendering
+
+Crawlers and link previews get fully rendered HTML with pagination, JSON-LD,
+`Cache-Control` headers, and an auto-generated `/sitemap.xml`:
+
+```json
+"ssr": {
+  "enabled": true,
+  "routes": {
+    "/s": { "template": "index.html", "data": { "posts": { ... } }, "cache": { "ttl": "5m" } },
+    "/s/posts/{id}": { "template": "post.html", "seo": { "json_ld": { "@type": "BlogPosting", ... } } }
+  }
+}
+```
+
+### Managed indexes
+
+Explicit indexes for the most common query patterns:
+
+```json
+"managed_indexes": {
+  "posts": [
+    { "keys": { "status": 1, "created_at": -1 }, "name": "idx_status_created" },
+    { "keys": { "tags": 1 }, "name": "idx_tags" }
+  ],
+  "comments": [
+    { "keys": { "post_id": 1, "approved": 1 }, "name": "idx_post_approved" }
+  ]
+}
+```
 
 ## Run with Docker
 
@@ -65,192 +184,36 @@ Auth is configured with `auth.users`:
 docker compose up --build
 ```
 
-Override admin credentials with env vars:
+Override admin credentials:
 
 ```bash
 ADMIN_EMAIL=me@corp.com ADMIN_PASSWORD=supersecret docker compose up
 ```
 
-Open **http://localhost:8000** -- the blog is live.
-Swagger docs at **http://localhost:8000/docs**.
+- **SPA:** http://localhost:8000 (hash-routed app with admin views)
+- **SSR home:** http://localhost:8000/s (server-rendered, SEO-friendly)
+- **SSR article:** http://localhost:8000/s/posts/{id}
+- **Sitemap:** http://localhost:8000/sitemap.xml
+- **Swagger docs:** http://localhost:8000/docs
 
 ## Run locally
 
 ```bash
-pip install mdb-engine uvicorn
+pip install "mdb-engine>=0.8.7" uvicorn httpx jinja2
 ADMIN_EMAIL=admin@example.com ADMIN_PASSWORD=admin123 mdb-engine serve manifest.json --reload
 ```
 
-Or provision an admin without any secrets in files or env vars:
+## CLI tools (new in 0.8.7)
 
 ```bash
-mdb-engine add-user manifest.json --email admin@example.com --role admin
-# prompts for password interactively
-```
+# Compare manifests (CI-friendly, non-zero exit on breaking changes)
+mdb-engine diff manifest.v1.json manifest.v2.json
 
-> **How does the frontend work?** `mdb-engine serve` auto-detects the `public/`
-> directory next to the manifest and serves `public/index.html` at `/`.
-> Static files are available at `/public/*`. No CORS, no extra config -- same origin.
+# Print generated routes, indexes, hooks without connecting to MongoDB
+mdb-engine dry-run manifest.json
 
----
-
-## Power Features Showcase
-
-Every feature below is configured entirely in `manifest.json`. Zero Python.
-
-### Secure-by-default -- auth enforced automatically
-
-When `auth.users.enabled` is `true` in the manifest, **every collection endpoint
-requires authentication** -- reads, writes, deletes, everything. You don't need
-to add `"auth": {"required": true}` to each collection. The engine enforces it.
-
-Per-collection `auth` config can only *tighten* access (e.g. `write_roles: ["admin"]`),
-never loosen it. There is no way to make a collection publicly accessible when
-app-level auth is on. This prevents accidental data exposure in zero-code apps.
-
-Additional hardening (all automatic when `auth.users.enabled` is true):
-
-- **Users collection blocked** -- the auth users collection (default `"users"`) is
-  never exposed via auto-CRUD. Users are managed exclusively through `/auth/*` endpoints.
-- **Protected fields** -- `role`, `roles`, `password`, `password_hash`, and `is_admin`
-  are automatically immutable on every collection. No client can escalate privileges
-  via PATCH/PUT.
-- **`writable_fields` allowlist** -- explicitly declare which fields clients can write.
-  Everything else is silently stripped. Allowlist > denylist.
-- **`public_read`** -- per-collection opt-in to anonymous read access. Writes still
-  require auth. Perfect for blogs, docs, catalogs.
-- **Login rate limiting** -- `max_login_attempts` (default 5) and `login_lockout_seconds`
-  (default 15 minutes) protect against brute-force attacks. Returns 429 with `Retry-After`.
-- **Restore policy enforced** -- soft-delete `_restore` endpoints respect ownership
-  policies. Non-owners cannot restore documents they don't own.
-- **Bulk insert hooks** -- `after_create` hooks fire for every document in a bulk insert,
-  ensuring audit trails have no blind spots.
-
-### Computed fields -- `?computed=comment_count`
-
-Posts can include a live comment count computed via aggregation at read time:
-
-```bash
-curl -s "http://localhost:8000/api/posts?scope=published&computed=comment_count"
-```
-
-```json
-{
-  "data": [{
-    "_id": "...",
-    "title": "Hello World",
-    "comment_count": 3
-  }]
-}
-```
-
-### Relations -- `?populate=post`
-
-Comments can include the full post they belong to:
-
-```bash
-curl -s "http://localhost:8000/api/comments?scope=approved&populate=post"
-```
-
-### Hooks -- automatic audit trail
-
-Every create, update, and delete on posts and comments fires a hook that inserts
-a document into `audit_log`. No application code, no event bus -- just config:
-
-```json
-"hooks": {
-  "after_create": [{
-    "action": "insert", "collection": "audit_log",
-    "document": {
-      "event": "post_created",
-      "entity_id": "{{doc._id}}",
-      "actor": "{{user.email}}",
-      "timestamp": "$$NOW"
-    }
-  }]
-}
-```
-
-### Tag aggregation pipeline
-
-The manifest defines a `by_tag` pipeline used by the frontend's tag filter chips:
-
-```bash
-curl -s "http://localhost:8000/api/posts/_agg/by_tag"
-```
-
-Returns `[{ "_id": "javascript", "count": 5 }, ...]` sorted by popularity.
-
-### Unique constraints -- `x-unique`
-
-Category names are unique. The engine auto-creates a unique index at startup:
-
-```json
-"name": { "type": "string", "x-unique": true }
-```
-
-### Owner field -- automatic ownership
-
-Posts have `"owner_field": "author_id"`. The engine auto-injects the creator's
-user ID as a default and generates write/delete policies.
-Admin bypasses ownership checks. Non-admin users can only modify documents they own.
-
-### TTL -- auto-expiring documents
-
-The `audit_log` collection has `"ttl": {"field": "timestamp", "expire_after": "90d"}`.
-MongoDB automatically deletes documents older than 90 days. No cron jobs, no cleanup code.
-
-### Env-var admin seeding -- `{{env.*}}` in demo_users
-
-No more plaintext passwords in `manifest.json`. Admin credentials are resolved
-from environment variables at startup.
-
-### CLI admin provisioning -- `mdb-engine add-user`
-
-Create users directly from the command line, no secrets in files:
-
-```bash
-mdb-engine add-user manifest.json --email admin@corp.com --role admin
-# prompts for password interactively
-```
-
----
-
-## Try with curl
-
-```bash
-# Login as admin
-curl -s -c cookies -X POST http://localhost:8000/auth/login \
-  -H "Content-Type: application/json" \
-  -d '{"email":"admin@example.com","password":"admin123"}'
-
-# List published posts (with computed comment count)
-curl -s -b cookies "http://localhost:8000/api/posts?scope=published&computed=comment_count"
-
-# Create a post
-curl -s -b cookies -X POST http://localhost:8000/api/posts \
-  -H "Content-Type: application/json" \
-  -d '{"title":"Hello World","body":"# Markdown works","status":"published"}'
-
-# Register a reader
-curl -s -c guest -X POST http://localhost:8000/auth/register \
-  -H "Content-Type: application/json" \
-  -d '{"email":"guest@example.com","password":"guest123"}'
-
-# Post a comment as guest
-curl -s -b guest -X POST http://localhost:8000/api/comments \
-  -H "Content-Type: application/json" \
-  -d '{"post_id":"{id}","body":"Great post!"}'
-
-# Approve comment as admin
-curl -s -b cookies -X PATCH http://localhost:8000/api/comments/{comment_id} \
-  -H "Content-Type: application/json" -d '{"approved":true}'
-
-# Tag stats (used by frontend tag filter)
-curl -s -b cookies "http://localhost:8000/api/posts/_agg/by_tag"
-
-# View audit log
-curl -s -b cookies "http://localhost:8000/api/audit_log?sort=-timestamp"
+# Generate typed TypeScript API client
+mdb-engine codegen manifest.json --target typescript --out api-client.ts
 ```
 
 ## What you get automatically
@@ -258,41 +221,50 @@ curl -s -b cookies "http://localhost:8000/api/audit_log?sort=-timestamp"
 | Feature | How |
 |---------|-----|
 | Secure-by-default | All endpoints require auth when `auth.users.enabled` is on |
-| Users collection blocked | Auth users collection never exposed via auto-CRUD |
+| **Role hierarchy** | `admin > editor > moderator > reader` — inherited permissions |
+| **Per-role writable fields** | Editors vs. moderators get different field access |
 | Protected fields | `role`, `password_hash`, etc. auto-immutable on all collections |
-| Writable fields allowlist | `writable_fields` restricts which fields clients can write |
-| Public read | `public_read: true` allows anonymous reads, writes still require auth |
+| Public read | `public_read: true` allows anonymous reads, writes require auth |
 | Login rate limiting | `max_login_attempts` blocks brute-force with 429 + Retry-After |
-| Auto-CRUD | GET, POST, PUT, PATCH, DELETE from a manifest |
+| Auto-CRUD | GET, POST, PUT, PATCH, DELETE from the manifest |
 | JSON Schema validation | Rejects bad documents before they hit the database |
+| **Referential integrity** | `x-references` validates foreign keys at write time |
+| **Tag validation** | `x-values-from` validates values against a lookup collection |
 | Named scopes | `?scope=published,drafts` activates predefined MQL filters |
 | Aggregation pipelines | `GET /api/{collection}/_agg/{name}` |
 | Document defaults | Auto-populate fields on create with `{{user.*}}` templates |
-| Owner field | Auto-inject creator ID, enforce write/delete ownership, admin bypass |
+| Owner field | Auto-inject creator ID, enforce write/delete ownership |
 | Immutable fields | Silently strip protected fields from updates |
-| Lifecycle hooks | Fire-and-forget side effects with `{{doc.*}}`, `{{user.*}}`, `$$NOW` |
+| **Conditional hooks** | Fire only when conditions match (`if` + `{{prev.*}}`) |
+| **Atomic update hooks** | `$inc`, `$push`, `$pull` in hook update actions |
+| **Cascade delete** | Auto-delete/soft-delete children when parent is removed |
+| **HTTP hooks (webhooks)** | Send requests to Slack, SendGrid, or any external service |
 | Relations / populate | `?populate=name` injects `$lookup` joins at read time |
 | Computed fields | `?computed=name` injects aggregation pipelines at read time |
-| Unique constraints | `x-unique` in schema auto-creates indexes, returns 409 on duplicates |
-| TTL | `"ttl": {"field":"ts","expire_after":"90d"}` auto-creates TTL indexes |
+| Unique constraints | `x-unique` in schema auto-creates indexes, returns 409 |
+| TTL | Auto-expiry via TTL indexes (90d audit, 7d notifications) |
 | Soft delete | Delete, trash, restore lifecycle |
+| **Cache directives** | Per-scope `Cache-Control` headers |
+| **Scheduled jobs** | Cron-like manifest jobs (archive stale drafts daily) |
+| **Server-side rendering** | Jinja2 templates with pagination, JSON-LD, sitemap |
+| **Managed indexes** | Explicit compound indexes for performance |
 | Bulk insert | Batch up to 1000 documents in one request |
-| Read-only mode | GET-only collections for logs, audit trails |
 | Timestamps | `created_at` and `updated_at` injected automatically |
 | Filtering | `?field=value`, `?field=gt:18`, `?field=in:a,b,c` |
 | Sorting | `?sort=-created_at,title` |
 | Pagination | `?limit=10&skip=20` |
 | Field selection | `?fields=title,status` |
 | Data isolation | All queries scoped by `app_id` automatically |
-| Env-var seeding | `{{env.*}}` in demo_users -- no plaintext secrets in manifest |
-| Registration role | `registration_role` controls what role self-registered users get |
-| Invite-only mode | `allow_registration: "invite_only"` with `invite_codes` |
-| CLI admin provisioning | `mdb-engine add-user` creates users with interactive password prompt |
+| Env-var seeding | `{{env.*}}` in demo_users — no plaintext secrets |
 | OpenAPI docs | Swagger UI at `/docs` |
+| **Manifest diff** | `mdb-engine diff` for CI pipelines |
+| **Dry-run** | `mdb-engine dry-run` to preview generated routes/indexes |
+| **TypeScript codegen** | `mdb-engine codegen` for typed API clients |
 
 ## The design principle
 
-> **MQL is the DSL.** Every `scopes`, `pipelines`, `defaults`, `hooks`, `relations`,
-> and `computed` value is a native MongoDB Query Language expression. The manifest
-> speaks the same language as the database -- no translation layer, no custom syntax.
+> **MQL is the DSL.** Every `scopes`, `pipelines`, `defaults`, `hooks`,
+> `relations`, `computed`, `cascade`, `cache`, and `jobs` value is a native
+> MongoDB Query Language expression. The manifest speaks the same language
+> as the database — no translation layer, no custom syntax.
 > Declare what you want. The engine handles the rest.

@@ -16,6 +16,7 @@ services:
     volumes:
       - ./manifest.json:/app/manifest.json
       - ./public:/app/public
+      - ./templates:/app/templates
     environment:
       # --- Database ---
       - MONGODB_URI=mongodb://mongo:27017/?directConnection=true

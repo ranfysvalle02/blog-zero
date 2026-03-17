@@ -12,6 +12,11 @@
       "max_login_attempts": 5,
       "login_lockout_seconds": 900,
       "session_cookie_name": "blog_session",
+      "role_hierarchy": {
+        "admin": ["editor", "moderator", "reader"],
+        "editor": ["reader"],
+        "moderator": ["reader"]
+      },
       "demo_users": [
         {
           "email": "{{env.ADMIN_EMAIL}}",
@@ -25,24 +30,29 @@
     "posts": {
       "auto_crud": true,
       "soft_delete": true,
-      "auth": { "public_read": true, "write_roles": ["admin"] },
+      "auth": { "public_read": true, "write_roles": ["editor"] },
       "owner_field": "author_id",
       "immutable_fields": ["author_id"],
-      "writable_fields": ["title", "body", "author", "status", "tags"],
+      "writable_fields": {
+        "editor": ["title", "body", "author", "status", "tags"],
+        "moderator": ["status", "tags"]
+      },
       "schema": {
         "type": "object",
         "properties": {
-          "title":  { "type": "string" },
-          "body":   { "type": "string" },
-          "author": { "type": "string" },
-          "status": { "type": "string", "enum": ["draft", "published", "archived"] },
-          "tags":   { "type": "array", "items": { "type": "string" } }
+          "title":         { "type": "string" },
+          "body":          { "type": "string" },
+          "author":        { "type": "string" },
+          "status":        { "type": "string", "enum": ["draft", "published", "archived"] },
+          "tags":          { "type": "array", "items": { "type": "string" }, "x-values-from": { "collection": "tags", "field": "name" } },
+          "comment_count": { "type": "integer" }
         },
         "required": ["title"]
       },
       "defaults": {
         "status": "draft",
         "tags": [],
+        "comment_count": 0,
         "author": "{{user.email}}"
       },
       "scopes": {
@@ -61,53 +71,84 @@
           { "$sort": { "count": -1 } }
         ]
       },
+      "relations": {
+        "author_user": { "from": "users", "local_field": "author_id", "foreign_field": "_id", "single": true }
+      },
       "hooks": {
         "after_create": [
-          { "action": "insert", "collection": "audit_log", "document": {
-            "event": "post_created", "entity": "posts", "entity_id": "{{doc._id}}", "actor": "{{user.email}}", "timestamp": "$$NOW"
-          }}
+          {
+            "action": "insert", "collection": "audit_log",
+            "document": {
+              "event": "post_created", "entity": "posts",
+              "entity_id": "{{doc._id}}", "actor": "{{user.email}}",
+              "title": "{{doc.title}}", "timestamp": "$$NOW"
+            }
+          }
         ],
         "after_update": [
-          { "action": "insert", "collection": "audit_log", "document": {
-            "event": "post_updated", "entity": "posts", "entity_id": "{{doc._id}}", "actor": "{{user.email}}", "timestamp": "$$NOW"
-          }}
+          {
+            "action": "insert", "collection": "notifications",
+            "document": {
+              "type": "post_published",
+              "message": "{{doc.title}} has been published",
+              "entity_id": "{{doc._id}}",
+              "actor": "{{user.email}}",
+              "read": false,
+              "timestamp": "$$NOW"
+            },
+            "if": {
+              "doc.status": "published",
+              "prev.status": { "$ne": "published" }
+            }
+          },
+          {
+            "action": "insert", "collection": "audit_log",
+            "document": {
+              "event": "post_updated", "entity": "posts",
+              "entity_id": "{{doc._id}}", "actor": "{{user.email}}",
+              "old_status": "{{prev.status}}", "new_status": "{{doc.status}}",
+              "timestamp": "$$NOW"
+            }
+          }
         ],
         "after_delete": [
-          { "action": "insert", "collection": "audit_log", "document": {
-            "event": "post_deleted", "entity": "posts", "entity_id": "{{doc._id}}", "actor": "{{user.email}}", "timestamp": "$$NOW"
-          }}
+          {
+            "action": "insert", "collection": "audit_log",
+            "document": {
+              "event": "post_deleted", "entity": "posts",
+              "entity_id": "{{doc._id}}", "actor": "{{user.email}}",
+              "timestamp": "$$NOW"
+            }
+          }
         ]
       },
-      "computed": {
-        "comment_count": {
-          "pipeline": [
-            { "$lookup": {
-              "from": "comments",
-              "let": { "pid": { "$toString": "$_id" } },
-              "pipeline": [
-                { "$match": { "$expr": { "$eq": ["$post_id", "$$pid"] } } }
-              ],
-              "as": "_comments"
-            }},
-            { "$addFields": { "comment_count": { "$size": "$_comments" } } },
-            { "$project": { "_comments": 0 } }
-          ]
-        }
+      "cascade": {
+        "on_delete": [
+          { "collection": "comments", "match_field": "post_id", "action": "delete" }
+        ],
+        "on_soft_delete": [
+          { "collection": "comments", "match_field": "post_id", "action": "soft_delete" }
+        ]
+      },
+      "cache": {
+        "scope:published": { "ttl": "5m", "stale_while_revalidate": "30s" },
+        "default": { "ttl": "0s" }
       }
     },
     "comments": {
       "auto_crud": true,
+      "soft_delete": true,
       "owner_field": "user_id",
       "immutable_fields": ["post_id", "user_id"],
       "auth": {
         "public_read": true,
         "create_required": true,
-        "write_roles": ["admin"]
+        "write_roles": ["moderator"]
       },
       "schema": {
         "type": "object",
         "properties": {
-          "post_id":  { "type": "string" },
+          "post_id":  { "type": "string", "x-references": { "collection": "posts", "field": "_id" } },
           "user_id":  { "type": "string" },
           "author":   { "type": "string" },
           "body":     { "type": "string" },
@@ -123,7 +164,7 @@
         "approved": { "approved": true },
         "pending": {
           "filter": { "approved": false },
-          "auth": { "roles": ["admin"] }
+          "auth": { "roles": ["moderator"] }
         }
       },
       "relations": {
@@ -131,15 +172,36 @@
       },
       "hooks": {
         "after_create": [
-          { "action": "insert", "collection": "audit_log", "document": {
-            "event": "comment_created", "entity": "comments", "entity_id": "{{doc._id}}", "actor": "{{user.email}}", "timestamp": "$$NOW"
-          }}
+          {
+            "action": "insert", "collection": "audit_log",
+            "document": {
+              "event": "comment_created", "entity": "comments",
+              "entity_id": "{{doc._id}}", "actor": "{{user.email}}",
+              "timestamp": "$$NOW"
+            }
+          }
+        ],
+        "after_update": [
+          {
+            "action": "update",
+            "collection": "posts",
+            "filter": { "_id": "{{doc.post_id}}" },
+            "update": { "$inc": { "comment_count": 1 } },
+            "if": { "doc.approved": true, "prev.approved": false }
+          },
+          {
+            "action": "update",
+            "collection": "posts",
+            "filter": { "_id": "{{doc.post_id}}" },
+            "update": { "$inc": { "comment_count": -1 } },
+            "if": { "doc.approved": false, "prev.approved": true }
+          }
         ]
       }
     },
     "categories": {
       "auto_crud": true,
-      "auth": { "write_roles": ["admin"] },
+      "auth": { "public_read": true, "write_roles": ["admin"] },
       "schema": {
         "type": "object",
         "properties": {
@@ -149,11 +211,127 @@
         "required": ["name"]
       }
     },
+    "tags": {
+      "auto_crud": true,
+      "auth": { "public_read": true, "write_roles": ["editor"] },
+      "schema": {
+        "type": "object",
+        "properties": {
+          "name": { "type": "string", "x-unique": true }
+        },
+        "required": ["name"]
+      }
+    },
+    "notifications": {
+      "auto_crud": true,
+      "auth": { "roles": ["editor"] },
+      "schema": {
+        "type": "object",
+        "properties": {
+          "type":      { "type": "string" },
+          "message":   { "type": "string" },
+          "entity_id": { "type": "string" },
+          "actor":     { "type": "string" },
+          "read":      { "type": "boolean" }
+        }
+      },
+      "defaults": { "read": false },
+      "scopes": {
+        "unread": { "read": false }
+      },
+      "ttl": { "field": "timestamp", "expire_after": "7d" }
+    },
     "audit_log": {
       "auto_crud": true,
       "read_only": true,
       "timestamps": false,
       "ttl": { "field": "timestamp", "expire_after": "90d" }
     }
+  },
+  "ssr": {
+    "enabled": true,
+    "site_name": "blog-zero",
+    "site_description": "A full-featured blog built from a single JSON manifest.",
+    "base_url": "",
+    "sitemap": true,
+    "routes": {
+      "/s": {
+        "template": "index.html",
+        "data": {
+          "posts": {
+            "collection": "posts",
+            "scope": "published",
+            "sort": { "created_at": -1 },
+            "limit": 12,
+            "computed": ["comment_count"]
+          },
+          "tag_stats": {
+            "collection": "posts",
+            "pipeline": "by_tag"
+          }
+        },
+        "seo": {
+          "title": "blog-zero",
+          "description": "Stories from the edge of code and creativity."
+        },
+        "cache": { "ttl": "5m", "stale_while_revalidate": "30s" }
+      },
+      "/s/posts/{id}": {
+        "template": "post.html",
+        "data": {
+          "post": {
+            "collection": "posts",
+            "id_param": "id"
+          },
+          "comments": {
+            "collection": "comments",
+            "filter": { "post_id": "{{params.id}}", "approved": true },
+            "sort": { "created_at": 1 },
+            "limit": 100
+          }
+        },
+        "seo": {
+          "title": "{{post.title}} — blog-zero",
+          "description": "{{post.excerpt}}",
+          "og_type": "article",
+          "json_ld": {
+            "@context": "https://schema.org",
+            "@type": "BlogPosting",
+            "headline": "{{post.title}}",
+            "datePublished": "{{post.created_at}}",
+            "author": {
+              "@type": "Person",
+              "name": "{{post.author}}"
+            },
+            "publisher": {
+              "@type": "Organization",
+              "name": "blog-zero"
+            }
+          }
+        },
+        "cache": { "ttl": "10m", "stale_while_revalidate": "1m" }
+      }
+    }
+  },
+  "jobs": {
+    "archive_stale_drafts": {
+      "schedule": "@daily",
+      "action": "update",
+      "collection": "posts",
+      "filter": {
+        "status": "draft",
+        "updated_at": { "$lt": "$$NOW_MINUS_90D" }
+      },
+      "update": { "$set": { "status": "archived" } }
+    }
+  },
+  "managed_indexes": {
+    "posts": [
+      { "type": "regular", "keys": { "status": 1, "created_at": -1 }, "name": "idx_status_created" },
+      { "type": "regular", "keys": { "tags": 1 }, "name": "idx_tags" }
+    ],
+    "comments": [
+      { "type": "regular", "keys": { "post_id": 1, "approved": 1 }, "name": "idx_post_approved" }
+    ]
   }
 }

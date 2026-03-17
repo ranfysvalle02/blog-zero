@@ -34,15 +34,16 @@ plan.
 **mdb-engine** is a Python framework that turns a JSON manifest into a
 production-grade REST API backed by MongoDB. The manifest is the single source
 of truth for collections, authentication, authorization, hooks, scopes,
-pipelines, relations, computed fields, and more.
+pipelines, relations, computed fields, cache directives, scheduled jobs,
+server-side rendering, and more.
 
 The core design principle:
 
 > **MQL is the DSL.** Every `scopes`, `pipelines`, `defaults`, `hooks`,
-> `relations`, and `computed` value is a native MongoDB Query Language
-> expression. The manifest speaks the same language as the database — no
-> translation layer, no custom syntax. Declare what you want. The engine
-> handles the rest.
+> `relations`, `computed`, and `cache` value is a native MongoDB Query Language
+> expression or derives directly from one. The manifest speaks the same
+> language as the database — no translation layer, no custom syntax. Declare
+> what you want. The engine handles the rest.
 
 ### What This Means in Practice
 
@@ -100,10 +101,14 @@ every query. No middleware chain, no decorator stack — just a filter.
 }
 ```
 
-Activated on demand via `?computed=comment_count`. No denormalization, no stale
-caches, no background sync. The aggregation runs at query time.
+Activated on demand via `?computed=comment_count`. For hot paths, the preferred
+pattern is a denormalized counter maintained by an `$inc` hook (see below) —
+no `$lookup`, no read-time cost. The `computed` pipeline remains available for
+ad-hoc or low-frequency queries where absolute freshness matters more than
+latency.
 
-**Hooks are MQL documents.** Want an automatic audit trail?
+**Hooks are MQL documents — with conditions and atomic operators.** Want an
+automatic audit trail?
 
 ```json
 "hooks": {
@@ -121,14 +126,52 @@ caches, no background sync. The aggregation runs at query time.
 ```
 
 The document template resolves placeholders and inserts directly into MongoDB.
-Fire-and-forget. No event bus, no message queue, no application code.
+No event bus, no message queue, no application code.
 
-## The Proof: A Production Blog in 160 Lines of JSON
+Hooks can be conditional. Want to notify only when a post transitions to
+published?
+
+```json
+"after_update": [{
+  "action": "insert",
+  "collection": "notifications",
+  "if": {
+    "status": "published",
+    "{{prev.status}}": { "$ne": "published" }
+  },
+  "document": {
+    "type": "post_published",
+    "post_id": "{{doc._id}}",
+    "timestamp": "$$NOW"
+  }
+}]
+```
+
+The `if` clause is an MQL filter evaluated against the current document —
+`{{prev.*}}` references the document's state before the update. Hooks can also
+use atomic update operators to maintain denormalized counters without
+read-modify-write cycles:
+
+```json
+"after_create": [{
+  "action": "update",
+  "collection": "posts",
+  "filter": { "_id": "{{doc.post_id}}" },
+  "update": { "$inc": { "comment_count": 1 } }
+}]
+```
+
+Hooks support fire-and-forget, background-with-retry, HTTP webhook actions,
+and optional transactional mode — all configured in the manifest.
+
+## The Proof: A Production Blog in 338 Lines of JSON
 
 The **Zero-Code Blog** is a fully functional blog platform — public reading,
-authenticated comments, admin publishing, comment moderation, soft delete with
-trash/restore, computed comment counts, cross-collection relations, automatic
-audit trails, and auto-expiring logs — built entirely from a single
+authenticated comments, admin publishing, role-based moderation, comment
+cascading, referential integrity, soft delete with trash/restore, denormalized
+comment counts, cross-collection relations, tag validation, automatic audit
+trails, cache directives, auto-expiring logs, scheduled archival, and
+server-side rendered pages for SEO — built entirely from a single
 `manifest.json`.
 
 | Capability | Traditional Stack | mdb-engine |
@@ -137,20 +180,30 @@ audit trails, and auto-expiring logs — built entirely from a single
 | REST API | Views + serializers + URL routing | `auto_crud: true` |
 | Authentication | passport.js / Django auth / custom | `auth.users` block |
 | Authorization | Custom middleware per route | `write_roles`, `policy`, `owner_field` |
+| Role hierarchy | Hand-coded role checks | `role_hierarchy` in manifest |
+| Per-role field access | Custom serializer logic | `writable_fields` keyed by role |
 | Named queries | Custom view methods | `scopes` (MQL filters) |
 | Analytics endpoints | Custom aggregation code | `pipelines` (MQL aggregations) |
 | Audit trail | Event bus + handlers + storage | `hooks` (MQL document templates) |
 | Computed fields | Denormalized counters + sync jobs | `computed` (MQL aggregations on demand) |
 | Cross-collection joins | ORM eager loading / N+1 fixes | `relations` (MQL `$lookup`) |
+| Referential integrity | DB foreign keys + app validation | `x-references` (validated at write time) |
+| Cascade delete | Manual cleanup / DB triggers | `on_delete: cascade \| soft_delete` |
+| Cache control | Reverse-proxy config / middleware | `cache` per scope (Cache-Control headers) |
+| Server-side rendering | Template engine + route handlers | `templates` (Jinja2, auto-wired) |
+| Scheduled jobs | Cron + custom scripts | `scheduled_jobs` in manifest |
 | Document expiry | Cron jobs + cleanup scripts | `ttl` (MongoDB TTL index) |
 | Input validation | Form validators / Pydantic models | `schema` (JSON Schema) |
+| Tag / enum validation | App-level lookups | `x-values-from` (validated against collection) |
 | Unique constraints | Database migrations | `x-unique` (auto-indexed) |
-| Field protection | Custom serializer logic | `writable_fields`, `immutable_fields` |
+| Managed indexes | Migration scripts | `indexes` in manifest |
+| TypeScript types | Manual type definitions | `mdb-engine codegen --target typescript` |
 
-The blog ships with four collections — `posts`, `comments`, `categories`,
-`audit_log` — and a vanilla JavaScript frontend served from `public/`. The
-frontend calls `fetch("/api/posts?scope=published")` on the same origin. No
-CORS. No build step. No proxy config.
+The blog ships with six collections — `posts`, `comments`, `categories`,
+`tags`, `notifications`, `audit_log` — a vanilla JavaScript SPA served from
+`public/`, and Jinja2 server-side rendered pages at `/s` and `/s/posts/{id}`
+for search-engine crawlers. An auto-generated `sitemap.xml` ties the two
+together. No CORS. No build step. No proxy config.
 
 ### Security Is Structural, Not Bolted On
 
@@ -160,6 +213,11 @@ writes. The `users` collection is never exposed via auto-CRUD. Fields like
 `role`, `password_hash`, and `is_admin` are auto-immutable on every collection.
 Login rate limiting, registration throttling, and request body size limits are
 all built in.
+
+Role hierarchy is declared once — `admin > editor > moderator > reader` — and
+enforced everywhere. Writable fields are scoped per role: editors get full
+content access, moderators get `status` and `tags` only. The hierarchy and
+field map live in the manifest, not in scattered middleware checks.
 
 This isn't security through configuration — it's security through constraint.
 The framework makes the insecure path harder than the secure one.
@@ -182,6 +240,13 @@ access control change is visible in code review without understanding a
 framework's internal routing, middleware ordering, or decorator semantics. The
 entire API contract lives in one file.
 
+`mdb-engine diff` compares two manifest versions and summarizes what changed —
+new collections, modified scopes, tightened permissions. `mdb-engine dry-run`
+validates a manifest against a live database without applying changes.
+`mdb-engine codegen --target typescript` emits TypeScript interfaces for every
+collection schema, keeping frontend types in sync with the manifest
+automatically.
+
 ### For Organizations
 
 The framework eliminates entire categories of bugs — ORM translation errors,
@@ -197,13 +262,14 @@ mdb-engine is a bet that MongoDB's query language is expressive enough to serve
 as a complete application DSL. Scopes prove it for filtering. Pipelines prove
 it for analytics. Policies prove it for authorization. Computed fields prove it
 for derived data. Hooks prove it for side effects. Relations prove it for
-joins.
+joins. Cascade rules prove it for referential integrity. Cache directives prove
+it for performance. Templates prove it for rendering.
 
 The manifest doesn't abstract MongoDB away — it leans into it. Every feature
 is a thin wrapper around a native MQL capability. The engine adds multi-tenancy
-(`app_id` scoping), template resolution (`{{user.*}}`, `{{doc.*}}`, `$$NOW`),
-and HTTP plumbing (FastAPI + Pydantic). Everything else is MongoDB, executing
-MQL, exactly as declared.
+(`app_id` scoping), template resolution (`{{user.*}}`, `{{doc.*}}`,
+`{{prev.*}}`, `$$NOW`), and HTTP plumbing (FastAPI + Pydantic). Everything
+else is MongoDB, executing MQL, exactly as declared.
 
 ## What's Next
 
@@ -217,4 +283,4 @@ The pattern is clear: **declare in MQL, let the engine handle the rest.**
 
 ---
 
-*mdb-engine v0.8.4 — MIT License — Python >=3.10*
+*mdb-engine v0.8.7 — MIT License — Python >=3.10*

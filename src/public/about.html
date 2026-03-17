@@ -15,14 +15,14 @@
 <body>
   <nav class="top" role="navigation" aria-label="Main navigation">
     <div class="nav-inner">
-      <a class="brand" href="/"><img src="/public/zero-logo.png" alt="" class="brand-logo"><span>blog-zero</span></a>
-      <div class="nav-links" id="nav-links">
-        <a href="/" class="nav-link">Home</a>
-        <a href="/#blog" class="nav-link">Blog</a>
-        <a href="/public/about.html" class="nav-link active">About</a>
+      <a class="brand" href="/#home"><img src="/public/zero-logo.png" alt="" class="brand-logo"><span>blog-zero</span></a>
+      <div class="nav-links" id="nav-links" role="tablist" aria-label="Views">
+        <a href="/#home" role="tab">Home</a>
+        <a href="/#blog" role="tab">Blog</a>
+        <a href="/public/about.html" class="nav-link active" role="tab" aria-selected="true">About</a>
       </div>
       <div class="nav-right">
-        <button class="theme-toggle desktop-only" aria-label="Toggle dark mode" role="switch">
+        <button class="theme-toggle desktop-only" aria-label="Toggle dark mode" role="switch" aria-checked="true">
           <span class="toggle-track">
             <span class="toggle-icon">&#9790;</span>
             <span class="toggle-icon">&#9788;</span>
@@ -86,7 +86,7 @@
         </ul>
 
         <hr>
-        <p><a href="/">&larr; Back to home</a></p>
+        <p><a href="/#home">&larr; Back to home</a></p>
       </div>
     </article>
   </main>

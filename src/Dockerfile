@@ -2,10 +2,11 @@ FROM python:3.11-slim
 
 WORKDIR /app
 
-RUN pip install --no-cache-dir "mdb-engine>=0.1" uvicorn
+RUN pip install --no-cache-dir "mdb-engine>=0.8.7" uvicorn httpx jinja2
 
 COPY manifest.json .
 COPY public/ public/
+COPY templates/ templates/
 
 ENV _MDB_SERVE_MANIFEST=/app/manifest.json
 EXPOSE 8000
