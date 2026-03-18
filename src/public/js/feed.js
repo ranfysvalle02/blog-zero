@@ -1,4 +1,4 @@
-import { $, UI_CONFIG, state, setState, esc, safeAttr, fmtDate, readTime, excerpt, md, toast, api, isAuthed, go } from "./utils.js";
+import { $, UI_CONFIG, state, setState, esc, safeAttr, fmtDate, readTime, excerpt, md, toast, api, isAuthed, go, renderShareBar } from "./utils.js";
 import { showAuthPanel } from "./auth.js";
 
 export function renderCard(p, extraClass = "") {
@@ -49,6 +49,7 @@ export async function handleArticleRoute(id) {
     `<h1 tabindex="-1">${esc(p.title)}</h1>` +
     `<div class="meta"><span>${esc(p.author || "Anonymous")}</span><span class="dot"></span><span>${fmtDate(p.created_at)}</span>${rt}${tags ? ` \u00a0 ${tags}` : ""}</div>` +
     "</header>" +
+    renderShareBar(id, p.title) +
     `<div class="prose">${md(p.body || "")}</div>` +
     commentSection;
 
@@ -86,11 +87,20 @@ export function bindArticleEvents() {
   const el = $("#article-content");
   if (!el) return;
   el.addEventListener("click", (e) => {
-    const el = e.target.closest("[data-action]");
-    if (!el) return;
+    const btn = e.target.closest("[data-action]");
+    if (!btn) return;
     e.preventDefault();
-    if (el.dataset.action === "post-comment") postComment();
-    if (el.dataset.action === "show-login") showAuthPanel("login");
-    if (el.dataset.action === "show-register") showAuthPanel("register");
+    if (btn.dataset.action === "post-comment") postComment();
+    if (btn.dataset.action === "show-login") showAuthPanel("login");
+    if (btn.dataset.action === "show-register") showAuthPanel("register");
+    if (btn.dataset.action === "copy-link") {
+      navigator.clipboard.writeText(btn.dataset.url).then(
+        () => toast("Link copied!"),
+        () => toast("Could not copy link", "err")
+      );
+    }
+    if (btn.dataset.action === "native-share") {
+      navigator.share({ title: btn.dataset.title, url: btn.dataset.url }).catch(() => {});
+    }
   });
 }

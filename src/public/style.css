@@ -736,6 +736,48 @@ nav.top .nav-links a.nav-link.active { color: var(--text); background: var(--acc
   flex-wrap: wrap;
 }
 
+/* --- Share Bar --- */
+.share-bar {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 12px 0;
+  margin-bottom: 8px;
+  border-top: 1px solid var(--border);
+  border-bottom: 1px solid var(--border);
+  flex-wrap: wrap;
+}
+.share-label {
+  font-size: 0.75rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--text-faint);
+  margin-right: 4px;
+}
+.share-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 12px;
+  border-radius: var(--radius);
+  background: var(--surface-2);
+  border: 1px solid var(--border);
+  color: var(--text-muted);
+  font-size: 0.8rem;
+  text-decoration: none;
+  transition: all var(--transition);
+  cursor: pointer;
+  font-family: var(--font-sans);
+}
+.share-btn:hover {
+  background: var(--surface-3);
+  color: var(--text);
+  border-color: var(--border-hover);
+  text-decoration: none;
+}
+.share-btn svg { flex-shrink: 0; }
+
 /* --- Prose --- */
 .prose {
   font-family: var(--font-serif);
