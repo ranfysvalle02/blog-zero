@@ -123,7 +123,15 @@ export function readTime(body) {
 
 export function excerpt(body, len = UI_CONFIG.layout.excerptLength) {
   if (!body) return "";
-  const plain = body.replace(/[#*>`_\[\]()~|]/g, "").replace(/\n+/g, " ").trim();
+  const plain = body
+    .replace(/<[^>]*>/g, "")
+    .replace(/https?:\/\/\S+/g, "")
+    .replace(/&nbsp;/gi, " ")
+    .replace(/&[a-z]+;/gi, " ")
+    .replace(/[#*>`_\[\]()~|]/g, "")
+    .replace(/---+/g, "")
+    .replace(/\s+/g, " ")
+    .trim();
   return plain.length > len ? plain.slice(0, len) + "\u2026" : plain;
 }
 
