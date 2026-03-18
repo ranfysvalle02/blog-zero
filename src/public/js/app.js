@@ -1,6 +1,7 @@
 import { $, $$, BLOG_CONFIG, UI_CONFIG, state, setState, esc, isAdmin, isAuthed } from "./utils.js";
 import { bindAuthEvents, refreshSession, showAuthPanel } from "./auth.js";
 import { bindArticleEvents, handleArticleRoute } from "./feed.js";
+import { cleanupArticleEnhancements } from "./article-enhance.js";
 import { bindHomeEvents, loadHome } from "./home.js";
 import { bindBlogEvents, loadBlog } from "./blog.js";
 import { bindComposeEvents, handleComposeRoute } from "./compose.js";
@@ -51,7 +52,14 @@ async function handleRoute() {
   const param = rest.join("/");
   if (!adminGuard(view)) return;
   setState("currentView", view);
-  updateRouteUi(view);
+  if (view !== "article") cleanupArticleEnhancements();
+
+  if (!initialLoad && document.startViewTransition) {
+    document.startViewTransition(() => updateRouteUi(view));
+  } else {
+    updateRouteUi(view);
+  }
+
   const data = routes[view] ? await routes[view](param) : null;
   updateSeo(view, data);
   if (!initialLoad) window.scrollTo(0, 0);

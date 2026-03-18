@@ -1,5 +1,6 @@
 import { $, UI_CONFIG, state, setState, esc, safeAttr, fmtDate, readTime, excerpt, md, toast, api, isAuthed, go, renderShareBar } from "./utils.js";
 import { showAuthPanel } from "./auth.js";
+import { enhanceArticle } from "./article-enhance.js";
 
 export function renderCard(p, extraClass = "") {
   const tags = UI_CONFIG.features.tags ? (p.tags || []).map((t) => `<span>${esc(t)}</span>`).join("") : "";
@@ -53,6 +54,7 @@ export async function handleArticleRoute(id) {
     `<div class="prose">${md(p.body || "")}</div>` +
     commentSection;
 
+  enhanceArticle(id);
   if (UI_CONFIG.features.comments) loadComments(id);
   return p;
 }
