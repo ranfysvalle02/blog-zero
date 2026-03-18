@@ -1,8 +1,8 @@
 import { shareUrl, esc, safeAttr } from "./utils.js";
+import { enhanceImagesWithGallery, markStandaloneImagesZoomable } from "./image-gallery.js";
 
 let _progressBar = null;
 let _scrollHandler = null;
-let _lightbox = null;
 let _selToolbar = null;
 let _selMousedownBound = false;
 let _observers = [];
@@ -17,7 +17,8 @@ export function enhanceArticle(postId) {
   injectCodeCopyButtons(prose);
   injectReferences(prose);
   initScrollReveal(prose);
-  initImageLightbox(prose);
+  enhanceImagesWithGallery(prose);
+  markStandaloneImagesZoomable(prose);
   initSelectionShare(prose, postId);
 }
 
@@ -232,35 +233,7 @@ function initScrollReveal(prose) {
   }
 }
 
-/* ---- Image Lightbox ---- */
-
-function initImageLightbox(prose) {
-  if (!_lightbox) {
-    _lightbox = document.createElement("div");
-    _lightbox.className = "lightbox";
-    _lightbox.innerHTML =
-      `<div class="lightbox-backdrop"></div>` +
-      `<img class="lightbox-img" src="" alt="">`;
-    document.body.appendChild(_lightbox);
-
-    const close = () => _lightbox.classList.remove("active");
-    _lightbox.querySelector(".lightbox-backdrop").addEventListener("click", close);
-    _lightbox.querySelector(".lightbox-img").addEventListener("click", close);
-    document.addEventListener("keydown", (e) => {
-      if (e.key === "Escape") close();
-    });
-  }
-
-  prose.querySelectorAll("img").forEach((img) => {
-    img.classList.add("zoomable");
-    img.addEventListener("click", () => {
-      const lbImg = _lightbox.querySelector(".lightbox-img");
-      lbImg.src = img.src;
-      lbImg.alt = img.alt;
-      _lightbox.classList.add("active");
-    });
-  });
-}
+/* ---- Image Lightbox (replaced by image-gallery.js) ---- */
 
 /* ---- Text Selection Share Toolbar ---- */
 

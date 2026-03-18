@@ -1,0 +1,246 @@
+# 🎨 Visual Guide to New Features
+
+## Homepage - Before & After
+
+### Before:
+```
+┌─────────────────────────────────────────────┐
+│  Post 1  │  Post 2  │  Post 3  │
+│          │          │          │  (Grid)
+└─────────────────────────────────────────────┘
+```
+
+### After:
+```
+┌─────────────────────────────────────────────┐
+│  ✦ FEATURED POST                            │
+│  ┌─────────────────────────────────────┐   │
+│  │ Large title, excerpt                │   │
+│  │ Glowing gradient background         │   │
+│  └─────────────────────────────────────┘   │
+└─────────────────────────────────────────────┘
+
+┌─────────────────────────────────────────────┐
+│  Recent Posts                               │
+│  ┌──────┐  ┌──────┐  ┌──────┐             │
+│  │Post 1│  │Post 2│  │Post 3│ (Stagger)   │
+│  │ 🖼️ 3 │  │ 🖼️ 1 │  │      │  Animation  │
+│  └──────┘  └──────┘  └──────┘             │
+│    ↑          ↑          ↑                  │
+│  Hover:    Hover:    Hover:                │
+│  Lifts     Lifts     Lifts                 │
+└─────────────────────────────────────────────┘
+```
+
+---
+
+## Image Gallery in Post
+
+### Standalone Image:
+```
+┌────────────────────────┐
+│                        │
+│    Single Image        │
+│    (Click to zoom)     │
+│        Cursor: 🔍      │
+│                        │
+└────────────────────────┘
+```
+
+### Gallery Carousel:
+```
+┌─────────────────────────────────────┐
+│  ← Current Image (1/5) →            │
+│  ┌───────────────────────────────┐  │
+│  │                               │  │
+│  │        Image Content          │  │
+│  │                               │  │
+│  └───────────────────────────────┘  │
+│        ● ○ ○ ○ ○  (dots)           │
+│   Optional Caption Text             │
+└─────────────────────────────────────┘
+```
+
+### Lightbox View:
+```
+┏━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┓
+┃  [Counter: 1 / 5]         [X Close]┃
+┃                                     ┃
+┃                                     ┃
+┃    ←    Full Screen Image    →     ┃
+┃                                     ┃
+┃                                     ┃
+┃        Optional Caption             ┃
+┗━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┛
+   Backdrop: Blurred + Dark
+   Keys: ← → Esc
+```
+
+---
+
+## Compose Editor - Image Manager
+
+### Editor View:
+```
+┌─────────────────────────────────────────────┐
+│  Title: "My Blog Post"                      │
+├─────────────────────────────────────────────┤
+│  🖼️ Images in Post (3)                      │
+│  ┌──────┐  ┌──────┐  ┌──────┐             │
+│  │Img 1 │  │Img 2 │  │Img 3 │             │
+│  │  [×] │  │  [×] │  │  [×] │             │
+│  └──────┘  └──────┘  └──────┘             │
+│     ↕          ↕          ↕                 │
+│  Drag to     Drag to    Drag to            │
+│  Reorder     Reorder    Reorder            │
+├─────────────────────────────────────────────┤
+│  Markdown Content:                          │
+│  # Heading                                  │
+│  ![Image 1](...)                            │
+│  Some text                                  │
+│  ![Image 2](...)                            │
+│  More text                                  │
+└─────────────────────────────────────────────┘
+```
+
+### Interaction Flow:
+```
+1. User drags "Img 3" to first position
+   ┌──────┐  ┌──────┐  ┌──────┐
+   │Img 1 │  │Img 2 │  │Img 3 │ ← Dragging
+   └──────┘  └──────┘  └──────┘
+              ↓
+   ┌──────┐  ┌──────┐  ┌──────┐
+   │Img 3 │  │Img 1 │  │Img 2 │ ✓ Reordered!
+   └──────┘  └──────┘  └──────┘
+
+2. Markdown automatically updates:
+   ![Image 3](...)  ← Moved to top
+   ![Image 1](...)
+   ![Image 2](...)
+
+3. Click [×] on Img 2
+   ┌──────┐  ┌──────┐
+   │Img 3 │  │Img 1 │  ← Img 2 removed
+   └──────┘  └──────┘
+```
+
+---
+
+## Card Design Details
+
+### Standard Card:
+```
+┌──────────────────────────────┐
+│ Author • Date • 2 min • 🖼️ 3 │ ← Meta
+│                              │
+│ Post Title Here              │ ← H2
+│                              │
+│ Excerpt preview text that    │ ← Excerpt
+│ gives you a taste of the...  │
+│                              │
+│ [tag1] [tag2]                │ ← Tags
+└──────────────────────────────┘
+   ↑ Hover: Lifts + Border glow
+```
+
+### Featured Card:
+```
+┌─────────────────────────────────┐
+│  ✦ FEATURED                     │
+│                                 │
+│  Larger Post Title              │
+│                                 │
+│  Extended excerpt preview       │
+│  with more context and detail   │
+│                                 │
+│  [Glowing gradient background]  │
+└─────────────────────────────────┘
+   ↑ Animated glow effect (8s cycle)
+```
+
+---
+
+## Animations Timeline
+
+### Page Load:
+```
+t=0s   ──────────────────────────────────────
+       Featured banner fades in
+       └→ scale(0.98) → scale(1)
+
+t=0.2s ──────────────────────────────────────
+       Card 1 fades in (translateY -24px)
+
+t=0.28s ─────────────────────────────────────
+       Card 2 fades in (stagger +0.08s)
+
+t=0.36s ─────────────────────────────────────
+       Card 3 fades in (stagger +0.08s)
+```
+
+### Carousel Navigation:
+```
+Click → button:
+  Current slide: opacity 1 → 0 (0.4s)
+  Next slide: opacity 0 → 1 (0.4s)
+  Dots update: inactive → active
+  Counter: "1 / 5" → "2 / 5"
+```
+
+### Lightbox Open/Close:
+```
+Open:
+  Backdrop: opacity 0 → 1 (0.3s)
+  Image: scale(0.95) → scale(1) (0.4s cubic-bezier)
+
+Close (Esc or click):
+  Backdrop: opacity 1 → 0 (0.3s)
+  Image: scale(1) → scale(0.95) (0.4s)
+```
+
+---
+
+## Responsive Breakpoints
+
+### Desktop (>820px):
+- Grid: Auto-fit (typically 3 columns)
+- Carousel: 16:10 aspect ratio
+- Full navigation controls
+
+### Tablet (820px - 640px):
+- Grid: 1 column
+- Carousel: 16:10 aspect ratio
+- Slightly smaller nav buttons
+
+### Mobile (<640px):
+- Grid: 1 column, smaller padding
+- Carousel: 4:3 aspect ratio
+- Compact nav buttons (36px)
+- Touch-friendly tap targets
+
+---
+
+## Color Scheme
+
+### Light Theme:
+- Background: `#faf9f7` (warm white)
+- Surface: `#f3f2ef` (light gray)
+- Accent: `#1a1a1a` (near black)
+- Border: `#d2d0cc` (subtle gray)
+
+### Dark Theme:
+- Background: `#0a0a0a` (near black)
+- Surface: `#141414` (dark gray)
+- Accent: `#e8e8e8` (light gray)
+- Border: `#2c2c2c` (subtle gray)
+
+### Both Themes:
+- Success: Green tones
+- Danger: Red tones
+- Warning: Amber tones
+- Smooth transitions between all states
+
+---
+
+Enjoy the visual polish! 🎉

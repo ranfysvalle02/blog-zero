@@ -43,9 +43,17 @@ export async function loadHome() {
     }
   }
 
+  // Create a staggered, creative layout for recent posts
+  const cardsHtml = gridPosts.map((p, idx) => {
+    const card = renderCard(p, "card-featured");
+    // Add stagger animation delay
+    return card.replace('<div class="card card-featured"',
+      `<div class="card card-featured" style="animation-delay: ${idx * 0.08}s"`);
+  }).join("");
+
   container.innerHTML =
     featuredHtml +
-    `<div class="recent-grid">${gridPosts.map((p) => renderCard(p, "card-featured")).join("")}</div>`;
+    `<div class="recent-grid">${cardsHtml}</div>`;
 }
 
 export function bindHomeEvents() {

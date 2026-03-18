@@ -9,9 +9,16 @@ export function renderCard(p, extraClass = "") {
     : "";
   const author = UI_CONFIG.layout.showAuthorInCard ? `<span>${esc(p.author || "Anonymous")}</span><span class="dot"></span>` : "";
   const rt = UI_CONFIG.features.readTime ? `<span class="dot"></span><span>${readTime(p.body)}</span>` : "";
+
+  // Count images in post
+  const imageCount = (p.body.match(/!\[([^\]]*)\]\(([^)]+)\)/g) || []).length;
+  const imageIndicator = imageCount > 0
+    ? `<span class="dot"></span><span class="card-image-count"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/><path d="M21 15l-5-5L5 21"/></svg> ${imageCount}</span>`
+    : "";
+
   return (
     `<div class="card ${esc(extraClass)}" role="article" tabindex="0" data-post-id="${safeAttr(p._id)}">` +
-    `<div class="meta">${author}<span>${fmtDate(p.created_at)}</span>${rt}${cc}</div>` +
+    `<div class="meta">${author}<span>${fmtDate(p.created_at)}</span>${rt}${cc}${imageIndicator}</div>` +
     `<h2>${esc(p.title)}</h2>` +
     `<div class="excerpt">${esc(excerpt(p.body))}</div>` +
     (tags ? `<div class="tags">${tags}</div>` : "") +
