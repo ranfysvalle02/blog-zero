@@ -13,13 +13,15 @@ let _focusMode = false;
    ================================================================ */
 
 export function handleComposeRoute(editId) {
+  openComposeModal();
+
   if (editId) {
     clearAutoSave();
     const cached = state.postCache.get(editId);
     if (cached) { populateForm(cached); return; }
     api("getPost", { pathParams: { id: editId } }).then((r) => {
       if (r.data?.data) populateForm(r.data.data);
-      else { toast("Post not found", "err"); go("manage"); }
+      else { toast("Post not found", "err"); closeComposeModal(); go("manage"); }
     });
     return;
   }
@@ -32,6 +34,81 @@ export function handleComposeRoute(editId) {
     clearForm();
   }
   autoGrow();
+}
+
+/* ================================================================
+   Modal animations
+   ================================================================ */
+
+function openComposeModal() {
+  const overlay = $("#compose-modal-overlay");
+  const container = $("#compose-modal-container");
+  const backdrop = $("#compose-modal-backdrop");
+  const closeBtn = $("#compose-modal-close");
+
+  if (!overlay || !container) return;
+
+  // Enable overlay
+  overlay.classList.add("active");
+  document.body.style.overflow = "hidden";
+
+  // Animate with GSAP for extra magic
+  if (window.gsap) {
+    gsap.fromTo(backdrop,
+      { opacity: 0 },
+      { opacity: 1, duration: 0.4, ease: "power2.out" }
+    );
+
+    gsap.fromTo(container,
+      { scale: 0.9, y: 30, opacity: 0 },
+      { scale: 1, y: 0, opacity: 1, duration: 0.6, ease: "back.out(1.4)" }
+    );
+
+    gsap.fromTo(closeBtn,
+      { scale: 0.5, rotation: -90, opacity: 0 },
+      { scale: 1, rotation: 0, opacity: 1, duration: 0.5, delay: 0.2, ease: "back.out(1.7)" }
+    );
+  }
+
+  // Focus title input after animation
+  setTimeout(() => {
+    const titleInput = $("#compose-post-title");
+    if (titleInput) titleInput.focus();
+  }, 400);
+}
+
+function closeComposeModal() {
+  const overlay = $("#compose-modal-overlay");
+  const container = $("#compose-modal-container");
+  const backdrop = $("#compose-modal-backdrop");
+
+  if (!overlay || !container) return;
+
+  // Animate out with GSAP
+  if (window.gsap) {
+    gsap.to(container, {
+      scale: 0.95,
+      y: 20,
+      opacity: 0,
+      duration: 0.3,
+      ease: "power2.in"
+    });
+
+    gsap.to(backdrop, {
+      opacity: 0,
+      duration: 0.3,
+      ease: "power2.in",
+      onComplete: () => {
+        overlay.classList.remove("active");
+        document.body.style.overflow = "";
+      }
+    });
+  } else {
+    setTimeout(() => {
+      overlay.classList.remove("active");
+      document.body.style.overflow = "";
+    }, 300);
+  }
 }
 
 /* ================================================================
@@ -116,8 +193,11 @@ async function submitPost(status) {
   toast(editId ? "Post updated" : status === "published" ? "Published!" : "Draft saved");
   clearAutoSave();
   clearForm();
-  go("feed");
-  window.dispatchEvent(new Event("feed:refresh"));
+  closeComposeModal();
+  setTimeout(() => {
+    go("feed");
+    window.dispatchEvent(new Event("feed:refresh"));
+  }, 300);
 }
 
 /* ================================================================
@@ -588,7 +668,17 @@ function onBodyInput() {
 
 function handleKeydown(e) {
   if (e.key === "Escape") {
-    if (_focusMode) { toggleFocusMode(); e.preventDefault(); }
+    if (_focusMode) {
+      toggleFocusMode();
+      e.preventDefault();
+    } else {
+      // Close modal on ESC if not in focus mode
+      const confirmed = confirm("Close editor? Any unsaved changes will be lost.");
+      if (confirmed) {
+        closeComposeModal();
+        go("feed");
+      }
+    }
     return;
   }
 
@@ -625,9 +715,33 @@ export function bindComposeEvents() {
   const modes = $("#compose-modes");
   const focusBtn = $("#compose-focus");
   const fileInput = $("#compose-file-input");
+  const modalClose = $("#compose-modal-close");
+  const modalBackdrop = $("#compose-modal-backdrop");
 
   $("#btn-publish").addEventListener("click", () => submitPost("published"));
   $("#btn-draft").addEventListener("click", () => submitPost("draft"));
+
+  // Close modal button
+  if (modalClose) {
+    modalClose.addEventListener("click", () => {
+      const confirmed = confirm("Close editor? Any unsaved changes will be lost.");
+      if (confirmed) {
+        closeComposeModal();
+        go("feed");
+      }
+    });
+  }
+
+  // Close on backdrop click
+  if (modalBackdrop) {
+    modalBackdrop.addEventListener("click", () => {
+      const confirmed = confirm("Close editor? Any unsaved changes will be lost.");
+      if (confirmed) {
+        closeComposeModal();
+        go("feed");
+      }
+    });
+  }
 
   body.addEventListener("input", onBodyInput);
   body.addEventListener("keydown", handleKeydown);

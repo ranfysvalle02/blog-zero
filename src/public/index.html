@@ -99,7 +99,16 @@
     </section>
 
     <section class="view" id="view-compose" aria-label="Post editor">
-      <div class="compose" id="compose-root">
+      <div class="compose-modal-overlay" id="compose-modal-overlay">
+        <div class="compose-modal-backdrop" id="compose-modal-backdrop"></div>
+        <div class="compose-modal-container" id="compose-modal-container">
+          <button class="compose-modal-close" id="compose-modal-close" aria-label="Close editor">
+            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <line x1="18" y1="6" x2="6" y2="18"></line>
+              <line x1="6" y1="6" x2="18" y2="18"></line>
+            </svg>
+          </button>
+          <div class="compose" id="compose-root">
         <div class="compose-modebar">
           <div class="compose-modes" id="compose-modes" role="tablist">
             <button class="compose-mode active" data-mode="write" role="tab" aria-selected="true">Write</button>
@@ -168,6 +177,8 @@
         </div>
 
         <input type="file" id="compose-file-input" accept="image/*" multiple class="hidden" aria-hidden="true">
+          </div>
+        </div>
       </div>
     </section>
 
