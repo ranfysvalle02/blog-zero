@@ -1,8 +1,10 @@
-import { $, UI_CONFIG, state, esc, md, toast, api, isAdmin, go, readTime } from "./utils.js";
-import { processImage, extractImageFiles } from "./image-util.js";
+import { $, UI_CONFIG, state, esc, md, toast, api, isAdmin, go, readTime, extractCover, stripCover, showConfirm } from "./utils.js";
+import { processImage, processCoverImage, extractImageFiles } from "./image-util.js";
 
 const AUTOSAVE_KEY = "blog-zero-draft";
 const AUTOSAVE_DELAY = 2000;
+const MAX_IMAGES = 3;
+const WARN_IMAGES = 2;
 let _autosaveTimer = null;
 let _previewTimer = null;
 let _currentMode = "write";
@@ -123,6 +125,7 @@ function populateForm(post) {
   body.value = post.body || "";
   updatePreview();
   updateImageManager();
+  updateCoverPreview();
   $("#compose-edit-id").value = post._id;
   $("#compose-edit-hint").textContent = "Editing \u2022 " + (post.title || "untitled");
   autoGrow();
@@ -140,6 +143,7 @@ function populateFromObj(obj) {
   }
   updatePreview();
   updateImageManager();
+  updateCoverPreview();
   autoGrow();
   updateStats();
 }
@@ -153,6 +157,7 @@ function clearForm() {
   $("#compose-edit-id").value = "";
   $("#compose-edit-hint").textContent = "";
   setSaveStatus("");
+  updateCoverPreview();
   autoGrow();
   updateStats();
 }
@@ -256,6 +261,8 @@ function updateImageManager() {
     `;
   }).join("");
 
+  const budgetClass = images.length >= MAX_IMAGES ? "budget-full" : images.length >= WARN_IMAGES ? "budget-warn" : "";
+
   managerEl.innerHTML = `
     <div class="compose-image-manager-title">
       <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
@@ -263,7 +270,7 @@ function updateImageManager() {
         <circle cx="8.5" cy="8.5" r="1.5"/>
         <path d="M21 15l-5-5L5 21"/>
       </svg>
-      Images in Post (${images.length})
+      Images in Post <span class="image-budget ${budgetClass}">(${images.length}/${MAX_IMAGES})</span>
     </div>
     <div class="compose-image-grid" id="compose-image-grid">
       ${gridHtml}
@@ -400,6 +407,70 @@ function reorderImages(fromIdx, toIdx) {
 
   $("#compose-body").value = newBody;
   onBodyInput();
+}
+
+/* ================================================================
+   Cover image picker
+   ================================================================ */
+
+function updateCoverPreview() {
+  const body = $("#compose-body").value;
+  const cover = extractCover(body);
+  const emptyEl = $("#compose-cover-empty");
+  const previewEl = $("#compose-cover-preview");
+  const img = $("#compose-cover-img");
+
+  if (cover) {
+    emptyEl.classList.add("hidden");
+    previewEl.classList.remove("hidden");
+    img.src = cover.src;
+    img.alt = cover.alt || "Cover";
+  } else {
+    emptyEl.classList.remove("hidden");
+    previewEl.classList.add("hidden");
+    img.src = "";
+  }
+}
+
+async function setCoverImage(file) {
+  try {
+    const { dataUri } = await processCoverImage(file);
+    const altText = file.name.replace(/\.[^.]+$/, "").replace(/[_-]+/g, " ");
+    const coverMd = `![${altText}](${dataUri})`;
+    const ta = $("#compose-body");
+
+    const existing = extractCover(ta.value);
+    if (existing) {
+      ta.value = ta.value.replace(/^!\[([^\]]*)\]\(([^)]+)\)\s*\n?/, coverMd + "\n");
+    } else {
+      ta.value = coverMd + "\n\n" + ta.value;
+    }
+    onBodyInput();
+    updateCoverPreview();
+  } catch (err) {
+    toast(err.message || "Cover image failed", "err");
+  }
+}
+
+function removeCoverImage() {
+  const ta = $("#compose-body");
+  ta.value = stripCover(ta.value);
+  onBodyInput();
+  updateCoverPreview();
+}
+
+/* ================================================================
+   Image budget helpers
+   ================================================================ */
+
+function countImages() {
+  const body = $("#compose-body").value;
+  const matches = body.match(/!\[([^\]]*)\]\(([^)]+)\)/g);
+  return matches ? matches.length : 0;
+}
+
+function canAddImages(count = 1) {
+  return countImages() + count <= MAX_IMAGES;
 }
 
 function updateStats() {
@@ -617,6 +688,16 @@ async function handleImageFiles(files) {
   const ta = $("#compose-body");
   if (!ta || !files.length) return;
 
+  if (!canAddImages(files.length)) {
+    const remaining = MAX_IMAGES - countImages();
+    if (remaining <= 0) {
+      toast(`Maximum ${MAX_IMAGES} images per post`, "err");
+      return;
+    }
+    toast(`Only ${remaining} image slot${remaining > 1 ? "s" : ""} remaining`, "err");
+    files = Array.from(files).slice(0, remaining);
+  }
+
   for (const file of files) {
     const cursor = ta.selectionStart;
     const placeholder = `![Uploading ${esc(file.name)}...]()`;
@@ -672,12 +753,12 @@ function handleKeydown(e) {
       toggleFocusMode();
       e.preventDefault();
     } else {
-      // Close modal on ESC if not in focus mode
-      const confirmed = confirm("Close editor? Any unsaved changes will be lost.");
-      if (confirmed) {
-        closeComposeModal();
-        go("feed");
-      }
+      showConfirm({
+        title: "Close editor?",
+        message: "Any unsaved changes will be lost.",
+        okLabel: "Discard & close",
+        cancelLabel: "Keep editing",
+      }).then((yes) => { if (yes) { closeComposeModal(); go("feed"); } });
     }
     return;
   }
@@ -724,22 +805,24 @@ export function bindComposeEvents() {
   // Close modal button
   if (modalClose) {
     modalClose.addEventListener("click", () => {
-      const confirmed = confirm("Close editor? Any unsaved changes will be lost.");
-      if (confirmed) {
-        closeComposeModal();
-        go("feed");
-      }
+      showConfirm({
+        title: "Close editor?",
+        message: "Any unsaved changes will be lost.",
+        okLabel: "Discard & close",
+        cancelLabel: "Keep editing",
+      }).then((yes) => { if (yes) { closeComposeModal(); go("feed"); } });
     });
   }
 
   // Close on backdrop click
   if (modalBackdrop) {
     modalBackdrop.addEventListener("click", () => {
-      const confirmed = confirm("Close editor? Any unsaved changes will be lost.");
-      if (confirmed) {
-        closeComposeModal();
-        go("feed");
-      }
+      showConfirm({
+        title: "Close editor?",
+        message: "Any unsaved changes will be lost.",
+        okLabel: "Discard & close",
+        cancelLabel: "Keep editing",
+      }).then((yes) => { if (yes) { closeComposeModal(); go("feed"); } });
     });
   }
 
@@ -807,4 +890,50 @@ export function bindComposeEvents() {
   });
   $("#compose-author").addEventListener("input", scheduleAutoSave);
   $("#compose-tags").addEventListener("input", scheduleAutoSave);
+
+  // Cover image picker
+  const coverArea = $("#compose-cover");
+  const coverEmpty = $("#compose-cover-empty");
+  const coverInput = $("#compose-cover-input");
+  const coverChangeBtn = $("#compose-cover-change");
+  const coverRemoveBtn = $("#compose-cover-remove");
+
+  if (coverEmpty) {
+    coverEmpty.addEventListener("click", () => coverInput.click());
+  }
+  if (coverChangeBtn) {
+    coverChangeBtn.addEventListener("click", (e) => { e.stopPropagation(); coverInput.click(); });
+  }
+  if (coverRemoveBtn) {
+    coverRemoveBtn.addEventListener("click", (e) => { e.stopPropagation(); removeCoverImage(); });
+  }
+  if (coverInput) {
+    coverInput.addEventListener("change", () => {
+      if (coverInput.files.length) setCoverImage(coverInput.files[0]);
+      coverInput.value = "";
+    });
+  }
+
+  // Cover area drag-and-drop
+  if (coverArea) {
+    let coverDrag = 0;
+    coverArea.addEventListener("dragenter", (e) => {
+      e.preventDefault();
+      coverDrag++;
+      coverArea.classList.add("drag-over");
+    });
+    coverArea.addEventListener("dragleave", (e) => {
+      e.preventDefault();
+      coverDrag--;
+      if (coverDrag <= 0) { coverDrag = 0; coverArea.classList.remove("drag-over"); }
+    });
+    coverArea.addEventListener("dragover", (e) => e.preventDefault());
+    coverArea.addEventListener("drop", (e) => {
+      e.preventDefault();
+      coverDrag = 0;
+      coverArea.classList.remove("drag-over");
+      const files = extractImageFiles(e);
+      if (files.length) setCoverImage(files[0]);
+    });
+  }
 }

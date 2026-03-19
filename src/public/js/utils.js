@@ -122,7 +122,7 @@ export function readTime(body) {
 }
 
 export function shareUrl(postId) {
-  return `${location.origin}/s/posts/${encodeURIComponent(postId)}`;
+  return `${location.origin}/#article/${encodeURIComponent(postId)}`;
 }
 
 export function renderShareBar(postId, title) {
@@ -164,6 +164,36 @@ export function excerpt(body, len = UI_CONFIG.layout.excerptLength) {
 
 export function isAdmin() { return state.session?.user?.role === "admin"; }
 export function isAuthed() { return !!state.session?.authenticated; }
+
+export function showConfirm({ title = "Are you sure?", message = "", okLabel = "Confirm", cancelLabel = "Cancel" } = {}) {
+  return new Promise((resolve) => {
+    const overlay = $("#confirm-overlay");
+    if (!overlay) { resolve(window.confirm(message || title)); return; }
+
+    $("#confirm-title").textContent = title;
+    $("#confirm-msg").textContent = message;
+    $("#confirm-ok").textContent = okLabel;
+    $("#confirm-cancel").textContent = cancelLabel;
+    overlay.classList.add("active");
+    overlay.setAttribute("aria-hidden", "false");
+    $("#confirm-cancel").focus();
+
+    function cleanup(result) {
+      overlay.classList.remove("active");
+      overlay.setAttribute("aria-hidden", "true");
+      $("#confirm-ok").removeEventListener("click", onOk);
+      $("#confirm-cancel").removeEventListener("click", onCancel);
+      $("#confirm-backdrop").removeEventListener("click", onCancel);
+      resolve(result);
+    }
+    function onOk() { cleanup(true); }
+    function onCancel() { cleanup(false); }
+
+    $("#confirm-ok").addEventListener("click", onOk);
+    $("#confirm-cancel").addEventListener("click", onCancel);
+    $("#confirm-backdrop").addEventListener("click", onCancel);
+  });
+}
 
 export function toast(msg, type = "ok") {
   const el = document.createElement("div");
@@ -251,4 +281,23 @@ DOMPurify.addHook("afterSanitizeAttributes", (node) => {
 export function md(src) {
   if (!src) return "";
   return DOMPurify.sanitize(marked.parse(src));
+}
+
+export function applyBgImages(root = document) {
+  root.querySelectorAll("[data-bg]").forEach((el) => {
+    el.style.backgroundImage = `url(${el.dataset.bg})`;
+    el.removeAttribute("data-bg");
+  });
+}
+
+export function extractCover(body) {
+  if (!body) return null;
+  const m = body.match(/^!\[([^\]]*)\]\(([^)]+)\)/);
+  if (!m) return null;
+  return { alt: m[1], src: m[2] };
+}
+
+export function stripCover(body) {
+  if (!body) return body;
+  return body.replace(/^!\[([^\]]*)\]\(([^)]+)\)\s*\n?/, "");
 }

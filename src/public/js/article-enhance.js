@@ -144,8 +144,10 @@ function injectCodeCopyButtons(prose) {
     const btn = document.createElement("button");
     btn.className = "code-copy";
     btn.textContent = "Copy";
+    const code = pre.querySelector("code");
     btn.addEventListener("click", () => {
-      navigator.clipboard.writeText(pre.textContent.replace(/Copy$/, "").trim()).then(() => {
+      const text = code ? code.textContent : pre.firstChild?.textContent || "";
+      navigator.clipboard.writeText(text.trim()).then(() => {
         btn.textContent = "Copied!";
         btn.classList.add("copied");
         setTimeout(() => {

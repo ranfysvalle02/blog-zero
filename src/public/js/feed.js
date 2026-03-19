@@ -1,4 +1,4 @@
-import { $, UI_CONFIG, state, setState, esc, safeAttr, fmtDate, readTime, excerpt, md, toast, api, isAuthed, go, renderShareBar } from "./utils.js";
+import { $, UI_CONFIG, state, setState, esc, safeAttr, fmtDate, readTime, excerpt, md, toast, api, isAuthed, go, renderShareBar, extractCover, stripCover, applyBgImages } from "./utils.js";
 import { showAuthPanel } from "./auth.js";
 import { enhanceArticle } from "./article-enhance.js";
 
@@ -10,18 +10,26 @@ export function renderCard(p, extraClass = "") {
   const author = UI_CONFIG.layout.showAuthorInCard ? `<span>${esc(p.author || "Anonymous")}</span><span class="dot"></span>` : "";
   const rt = UI_CONFIG.features.readTime ? `<span class="dot"></span><span>${readTime(p.body)}</span>` : "";
 
-  // Count images in post
   const imageCount = (p.body.match(/!\[([^\]]*)\]\(([^)]+)\)/g) || []).length;
   const imageIndicator = imageCount > 0
     ? `<span class="dot"></span><span class="card-image-count"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/><path d="M21 15l-5-5L5 21"/></svg> ${imageCount}</span>`
     : "";
 
+  const cover = extractCover(p.body);
+  const coverHtml = cover
+    ? `<div class="card-cover" data-bg="${safeAttr(cover.src)}"></div>`
+    : "";
+  const bodyExcerpt = cover ? excerpt(stripCover(p.body)) : excerpt(p.body);
+
   return (
-    `<div class="card ${esc(extraClass)}" role="article" tabindex="0" data-post-id="${safeAttr(p._id)}">` +
+    `<div class="card ${cover ? "card-has-cover" : ""} ${esc(extraClass)}" role="article" tabindex="0" data-post-id="${safeAttr(p._id)}">` +
+    coverHtml +
+    `<div class="card-body">` +
     `<div class="meta">${author}<span>${fmtDate(p.created_at)}</span>${rt}${cc}${imageIndicator}</div>` +
     `<h2>${esc(p.title)}</h2>` +
-    `<div class="excerpt">${esc(excerpt(p.body))}</div>` +
+    `<div class="excerpt">${esc(bodyExcerpt)}</div>` +
     (tags ? `<div class="tags">${tags}</div>` : "") +
+    `</div>` +
     "</div>"
   );
 }
@@ -51,16 +59,24 @@ export async function handleArticleRoute(id) {
     commentSection = `<div class="comments"><h3>${esc(UI_CONFIG.labels.commentsTitle)}</h3>${composer}<div id="comment-list"><span class="loading-text">Loading comments...</span></div></div>`;
   }
 
+  const cover = extractCover(p.body || "");
+  const coverBanner = cover
+    ? `<div class="article-cover"><img src="${safeAttr(cover.src)}" alt="${esc(cover.alt || p.title)}" /></div>`
+    : "";
+  const proseBody = cover ? stripCover(p.body || "") : (p.body || "");
+
   contentEl.innerHTML =
     `<a href="#blog" class="back">\u2190 ${esc(UI_CONFIG.labels.backToPosts)}</a>` +
+    coverBanner +
     "<header>" +
     `<h1 tabindex="-1">${esc(p.title)}</h1>` +
     `<div class="meta"><span>${esc(p.author || "Anonymous")}</span><span class="dot"></span><span>${fmtDate(p.created_at)}</span>${rt}${tags ? ` \u00a0 ${tags}` : ""}</div>` +
     "</header>" +
     renderShareBar(id, p.title) +
-    `<div class="prose">${md(p.body || "")}</div>` +
+    `<div class="prose">${md(proseBody)}</div>` +
     commentSection;
 
+  applyBgImages(contentEl);
   enhanceArticle(id);
   if (UI_CONFIG.features.comments) loadComments(id);
   return p;

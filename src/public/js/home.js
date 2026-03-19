@@ -1,8 +1,55 @@
-import { $, BLOG_CONFIG, UI_CONFIG, esc, excerpt, api, go, renderSkeleton, renderError } from "./utils.js";
+import { $, BLOG_CONFIG, UI_CONFIG, esc, safeAttr, fmtDate, readTime, excerpt, api, go, renderSkeleton, renderError, extractCover, stripCover, applyBgImages } from "./utils.js";
 import { renderCard } from "./feed.js";
 import { initHero } from "./hero.js";
 
 let heroInitialized = false;
+
+function renderHeadlineCard(p) {
+  const cover = extractCover(p.body);
+  const coverAttr = cover ? `data-bg="${safeAttr(cover.src)}"` : "";
+  const body = cover ? stripCover(p.body) : p.body;
+  const tags = (p.tags || []).slice(0, 3).map((t) => `<span class="tag tag-neutral">${esc(t)}</span>`).join(" ");
+  const rt = readTime(p.body);
+
+  return (
+    `<div class="card-headline" data-post-id="${safeAttr(p._id)}">` +
+      `<div class="card-headline-cover${cover ? "" : " card-headline-cover--empty"}" ${coverAttr}>` +
+        `<div class="card-headline-overlay">` +
+          `<div class="card-headline-meta"><span>${esc(p.author || "Anonymous")}</span><span class="dot"></span><span>${fmtDate(p.created_at)}</span><span class="dot"></span><span>${rt}</span></div>` +
+          `<h2 class="card-headline-title">${esc(p.title)}</h2>` +
+          `<p class="card-headline-excerpt">${esc(excerpt(body, 180))}</p>` +
+          (tags ? `<div class="card-headline-tags">${tags}</div>` : "") +
+        `</div>` +
+      `</div>` +
+    `</div>`
+  );
+}
+
+function renderSecondaryCard(p) {
+  const cover = extractCover(p.body);
+  const body = cover ? stripCover(p.body) : p.body;
+  const rt = readTime(p.body);
+
+  return (
+    `<div class="card-secondary" data-post-id="${safeAttr(p._id)}">` +
+      (cover ? `<div class="card-secondary-cover" data-bg="${safeAttr(cover.src)}"></div>` : "") +
+      `<div class="card-secondary-content">` +
+        `<div class="meta"><span>${fmtDate(p.created_at)}</span><span class="dot"></span><span>${rt}</span></div>` +
+        `<h3>${esc(p.title)}</h3>` +
+        `<p class="excerpt">${esc(excerpt(body, 100))}</p>` +
+      `</div>` +
+    `</div>`
+  );
+}
+
+function renderCompactCard(p) {
+  return (
+    `<div class="card-compact" data-post-id="${safeAttr(p._id)}">` +
+      `<h4>${esc(p.title)}</h4>` +
+      `<div class="meta"><span>${fmtDate(p.created_at)}</span><span class="dot"></span><span>${readTime(p.body)}</span></div>` +
+    `</div>`
+  );
+}
 
 export async function loadHome() {
   if (!heroInitialized) {
@@ -14,7 +61,7 @@ export async function loadHome() {
   const container = $("#home-recent");
   container.innerHTML = renderSkeleton(3);
 
-  const r = await api("listPosts", { params: { limit: cfg.recentCount } });
+  const r = await api("listPosts", { params: { limit: String(Math.max(cfg.recentCount || 6, 7)) } });
 
   if (r.networkError) {
     container.innerHTML = renderError("Could not reach the server. Is the API running?", loadHome);
@@ -27,33 +74,26 @@ export async function loadHome() {
     return;
   }
 
-  let featuredHtml = "";
-  let gridPosts = posts;
+  const headline = posts[0];
+  const secondaries = posts.slice(1, 3);
+  const compacts = posts.slice(3, 7);
 
-  if (cfg.featuredPostId) {
-    const featured = posts.find((p) => p._id === cfg.featuredPostId);
-    if (featured) {
-      gridPosts = posts.filter((p) => p._id !== cfg.featuredPostId);
-      featuredHtml =
-        `<div class="featured-banner" data-post-id="${esc(featured._id)}">` +
-        `<div class="featured-label">Featured</div>` +
-        `<h2>${esc(featured.title)}</h2>` +
-        `<div class="excerpt">${esc(excerpt(featured.body))}</div>` +
-        `</div>`;
-    }
+  let html = "";
+
+  html += `<section class="home-section home-section--headline">${renderHeadlineCard(headline)}</section>`;
+
+  if (secondaries.length) {
+    html += `<section class="home-section"><h3 class="home-section-label">More Stories</h3><div class="home-secondary-grid">${secondaries.map(renderSecondaryCard).join("")}</div></section>`;
   }
 
-  // Create a staggered, creative layout for recent posts
-  const cardsHtml = gridPosts.map((p, idx) => {
-    const card = renderCard(p, "card-featured");
-    // Add stagger animation delay
-    return card.replace('<div class="card card-featured"',
-      `<div class="card card-featured" style="animation-delay: ${idx * 0.08}s"`);
-  }).join("");
+  if (compacts.length) {
+    html += `<section class="home-section"><h3 class="home-section-label">Latest</h3><div class="home-compact-grid">${compacts.map(renderCompactCard).join("")}</div></section>`;
+  }
 
-  container.innerHTML =
-    featuredHtml +
-    `<div class="recent-grid">${cardsHtml}</div>`;
+  html += `<div class="home-browse"><a href="#blog" class="btn btn-outline">Browse all posts &rarr;</a></div>`;
+
+  container.innerHTML = html;
+  applyBgImages(container);
 }
 
 export function bindHomeEvents() {

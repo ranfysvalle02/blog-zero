@@ -1,4 +1,4 @@
-import { $, $$, BLOG_CONFIG, UI_CONFIG, esc, api, go, renderSkeleton, renderError } from "./utils.js";
+import { $, $$, BLOG_CONFIG, UI_CONFIG, esc, api, go, renderSkeleton, renderError, applyBgImages } from "./utils.js";
 import { renderCard } from "./feed.js";
 
 let allPosts = [];
@@ -71,6 +71,8 @@ function renderPosts() {
     `<div class="feed">${page.map((p) => renderCard(p)).join("")}</div>` +
     (hasMore ? `<div class="load-more-wrap"><button class="btn btn-outline" id="load-more-btn">Load more</button></div>` : "") +
     `<p class="post-count">Showing ${page.length} of ${filtered.length} post${filtered.length === 1 ? "" : "s"}</p>`;
+
+  applyBgImages(container);
 }
 
 export function bindBlogEvents() {

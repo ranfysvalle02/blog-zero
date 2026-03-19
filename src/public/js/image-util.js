@@ -50,6 +50,57 @@ export function processImage(file) {
   });
 }
 
+const COVER_WIDTH = 1200;
+const COVER_HEIGHT = 675;
+
+/**
+ * Resize + crop an image to 16:9 cover dimensions.
+ * Center-crops the source to fill the target aspect ratio.
+ */
+export function processCoverImage(file) {
+  return new Promise((resolve, reject) => {
+    if (!file || !file.type.startsWith("image/")) {
+      reject(new Error("Not an image file"));
+      return;
+    }
+    if (file.size > MAX_RAW_SIZE) {
+      reject(new Error("Image exceeds 10 MB limit"));
+      return;
+    }
+
+    const reader = new FileReader();
+    reader.onerror = () => reject(new Error("Failed to read file"));
+    reader.onload = () => {
+      const img = new Image();
+      img.onerror = () => reject(new Error("Failed to decode image"));
+      img.onload = () => {
+        const targetRatio = COVER_WIDTH / COVER_HEIGHT;
+        const srcRatio = img.width / img.height;
+
+        let sx = 0, sy = 0, sw = img.width, sh = img.height;
+        if (srcRatio > targetRatio) {
+          sw = Math.round(img.height * targetRatio);
+          sx = Math.round((img.width - sw) / 2);
+        } else {
+          sh = Math.round(img.width / targetRatio);
+          sy = Math.round((img.height - sh) / 2);
+        }
+
+        const canvas = document.createElement("canvas");
+        canvas.width = COVER_WIDTH;
+        canvas.height = COVER_HEIGHT;
+        const ctx = canvas.getContext("2d");
+        ctx.drawImage(img, sx, sy, sw, sh, 0, 0, COVER_WIDTH, COVER_HEIGHT);
+
+        const dataUri = canvas.toDataURL("image/jpeg", JPEG_QUALITY);
+        resolve({ dataUri, width: COVER_WIDTH, height: COVER_HEIGHT });
+      };
+      img.src = reader.result;
+    };
+    reader.readAsDataURL(file);
+  });
+}
+
 /**
  * Extract image Files from a ClipboardEvent or DragEvent.
  */

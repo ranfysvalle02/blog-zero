@@ -53,6 +53,7 @@
       { label: "Home", href: "/#home" },
       { label: "Blog", href: "/#blog" },
       { label: "About", href: "/public/about.html" },
+      { label: "Write", href: "/#compose" },
     ];
     drawer.innerHTML =
       '<div class="drawer-header">' +
