@@ -1,10 +1,48 @@
 const MAX_DIMENSION = 1200;
-const JPEG_QUALITY = 0.75;
+const COVER_WIDTH = 1200;
+const COVER_HEIGHT = 675;
 const MAX_RAW_SIZE = 10 * 1024 * 1024;
 
+const TARGET_BYTES = 120 * 1024;
+const INITIAL_QUALITY = 0.72;
+const MIN_QUALITY = 0.30;
+const QUALITY_STEP = 0.08;
+
 /**
- * Resize + compress an image File to a base64 data URI.
- * Returns { dataUri, width, height } or throws on invalid input.
+ * Compress a canvas to JPEG, stepping down quality until the data URI
+ * is under TARGET_BYTES. Returns the data URI string.
+ */
+function compressCanvas(canvas, startQuality = INITIAL_QUALITY) {
+  let q = startQuality;
+  let uri = canvas.toDataURL("image/jpeg", q);
+
+  while (uri.length > TARGET_BYTES && q > MIN_QUALITY) {
+    q -= QUALITY_STEP;
+    uri = canvas.toDataURL("image/jpeg", q);
+  }
+
+  if (uri.length > TARGET_BYTES && canvas.width > 800) {
+    const scale = 0.7;
+    const w = Math.round(canvas.width * scale);
+    const h = Math.round(canvas.height * scale);
+    const small = document.createElement("canvas");
+    small.width = w;
+    small.height = h;
+    small.getContext("2d").drawImage(canvas, 0, 0, w, h);
+    q = Math.max(startQuality - 0.05, MIN_QUALITY);
+    uri = small.toDataURL("image/jpeg", q);
+    while (uri.length > TARGET_BYTES && q > MIN_QUALITY) {
+      q -= QUALITY_STEP;
+      uri = small.toDataURL("image/jpeg", q);
+    }
+  }
+
+  return uri;
+}
+
+/**
+ * Resize + compress an image File to a JPEG data URI.
+ * Always outputs JPEG regardless of input format.
  */
 export function processImage(file) {
   return new Promise((resolve, reject) => {
@@ -34,14 +72,9 @@ export function processImage(file) {
         const canvas = document.createElement("canvas");
         canvas.width = width;
         canvas.height = height;
-        const ctx = canvas.getContext("2d");
-        ctx.drawImage(img, 0, 0, width, height);
+        canvas.getContext("2d").drawImage(img, 0, 0, width, height);
 
-        const keepPng = file.type === "image/png" || file.type === "image/svg+xml";
-        const mime = keepPng ? "image/png" : "image/jpeg";
-        const quality = keepPng ? undefined : JPEG_QUALITY;
-        const dataUri = canvas.toDataURL(mime, quality);
-
+        const dataUri = compressCanvas(canvas);
         resolve({ dataUri, width, height });
       };
       img.src = reader.result;
@@ -50,12 +83,8 @@ export function processImage(file) {
   });
 }
 
-const COVER_WIDTH = 1200;
-const COVER_HEIGHT = 675;
-
 /**
- * Resize + crop an image to 16:9 cover dimensions.
- * Center-crops the source to fill the target aspect ratio.
+ * Resize + center-crop an image to 16:9 cover dimensions, output JPEG.
  */
 export function processCoverImage(file) {
   return new Promise((resolve, reject) => {
@@ -89,10 +118,9 @@ export function processCoverImage(file) {
         const canvas = document.createElement("canvas");
         canvas.width = COVER_WIDTH;
         canvas.height = COVER_HEIGHT;
-        const ctx = canvas.getContext("2d");
-        ctx.drawImage(img, sx, sy, sw, sh, 0, 0, COVER_WIDTH, COVER_HEIGHT);
+        canvas.getContext("2d").drawImage(img, sx, sy, sw, sh, 0, 0, COVER_WIDTH, COVER_HEIGHT);
 
-        const dataUri = canvas.toDataURL("image/jpeg", JPEG_QUALITY);
+        const dataUri = compressCanvas(canvas);
         resolve({ dataUri, width: COVER_WIDTH, height: COVER_HEIGHT });
       };
       img.src = reader.result;

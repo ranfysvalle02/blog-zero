@@ -48,7 +48,7 @@
   </nav>
 
   <main class="wrap" role="main">
-    <div class="auth-panel" id="auth-panel" role="dialog" aria-label="Authentication" aria-hidden="true">
+    <div class="auth-panel" id="auth-panel" role="dialog" aria-label="Authentication" inert>
       <button class="auth-close" id="auth-close" aria-label="Close">&times;</button>
       <img src="/public/zero-logo.png" alt="blog-zero" class="auth-logo">
       <h3 id="auth-panel-title">Sign in</h3>
@@ -79,9 +79,6 @@
         <h1 tabindex="-1">Recent Posts</h1>
       </header>
       <div id="home-recent" aria-label="Recent posts"></div>
-      <div class="cta-block" id="home-cta">
-        <a href="#blog" class="btn btn-outline">Browse all posts &rarr;</a>
-      </div>
     </section>
 
     <section class="view" id="view-blog" aria-label="Browse posts">
@@ -149,6 +146,37 @@
 
           <div class="ev-surface" id="compose-editor" data-mode="write">
             <div class="ev-write" id="compose-write-pane">
+
+              <div class="ev-cover-zone" id="compose-cover-zone" role="button" tabindex="0" aria-label="Add cover image">
+                <div class="ev-cover-zone-empty" id="compose-cover-empty">
+                  <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/><path d="M21 15l-5-5L5 21"/></svg>
+                  <span>Upload cover image</span>
+                  <span class="ev-cover-or">or</span>
+                  <div class="ev-cover-url-row">
+                    <input class="ev-cover-url" id="compose-cover-url" type="url" placeholder="Paste image URL..." autocomplete="off" aria-label="Cover image URL">
+                    <button class="ev-cover-url-btn" id="compose-cover-url-go" type="button">Use</button>
+                  </div>
+                </div>
+                <div class="ev-cover-zone-preview hidden" id="compose-cover-preview">
+                  <img id="compose-cover-img" src="" alt="" />
+                  <div class="ev-cover-caption-row">
+                    <svg class="ev-cover-caption-icon" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M12 20h9"/><path d="M16.5 3.5a2.121 2.121 0 013 3L7 19l-4 1 1-4L16.5 3.5z"/></svg>
+                    <input class="ev-cover-caption" id="compose-cover-caption" placeholder="Add a caption..." autocomplete="off" aria-label="Cover image caption">
+                  </div>
+                  <div class="ev-cover-zone-actions">
+                    <button class="ev-cover-btn" id="compose-cover-change" type="button">
+                      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 2v6h-6M3 12a9 9 0 0115.36-6.36L21 8M3 22v-6h6M21 12a9 9 0 01-15.36 6.36L3 16"/></svg>
+                      Change
+                    </button>
+                    <button class="ev-cover-btn ev-cover-btn-remove" id="compose-cover-remove-btn" type="button">
+                      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 6L6 18M6 6l12 12"/></svg>
+                      Remove
+                    </button>
+                  </div>
+                </div>
+                <input type="file" id="compose-cover-file" accept="image/*" class="hidden" aria-hidden="true">
+              </div>
+
               <input class="ev-title" id="compose-post-title" placeholder="Title" autocomplete="off" aria-label="Post title" tabindex="-1">
               <div class="ev-byline" id="compose-byline">
                 <span class="ev-byline-label">by</span>
@@ -161,12 +189,7 @@
                 <div class="ev-tagpicker-pills" id="compose-tag-pills"></div>
                 <input id="compose-tag-input" placeholder="Add tag..." autocomplete="off" aria-label="Add a tag">
               </div>
-              <textarea id="compose-body" placeholder="Tell your story... (paste or drop images anywhere)" aria-label="Post body in Markdown"></textarea>
-              <div class="ev-dropzone" id="compose-dropzone">
-                <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/><path d="M21 15l-5-5L5 21"/></svg>
-                <span>Drop image here</span>
-              </div>
-              <div id="compose-image-manager-slot"></div>
+              <textarea id="compose-body" placeholder="Tell your story..." aria-label="Post body in Markdown"></textarea>
             </div>
             <div class="ev-preview" id="compose-preview-pane">
               <div class="prose" id="compose-preview">
@@ -176,7 +199,6 @@
           </div>
         </div>
 
-        <input type="file" id="compose-file-input" accept="image/*" multiple class="hidden" aria-hidden="true">
       </div>
     </section>
 

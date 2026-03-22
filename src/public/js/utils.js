@@ -151,6 +151,8 @@ export function renderShareBar(postId, title) {
 export function excerpt(body, len = UI_CONFIG.layout.excerptLength) {
   if (!body) return "";
   const plain = body
+    .replace(/!\[[^\]]*\]\([^)]+\)/g, "")
+    .replace(/data:[a-z/+]+;base64,[A-Za-z0-9+/=]+/g, "")
     .replace(/<[^>]*>/g, "")
     .replace(/https?:\/\/\S+/g, "")
     .replace(/&nbsp;/gi, " ")

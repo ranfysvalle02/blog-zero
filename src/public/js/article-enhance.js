@@ -1,5 +1,5 @@
 import { shareUrl, esc, safeAttr } from "./utils.js";
-import { enhanceImagesWithGallery, markStandaloneImagesZoomable, injectPhotoShowcase } from "./image-gallery.js";
+import { enhanceArticleImages } from "./image-gallery.js";
 
 let _progressBar = null;
 let _scrollHandler = null;
@@ -18,9 +18,7 @@ export function enhanceArticle(postId) {
   injectCodeCopyButtons(prose);
   injectReferences(prose);
   initScrollReveal(prose);
-  enhanceImagesWithGallery(prose);
-  markStandaloneImagesZoomable(prose);
-  injectPhotoShowcase(article);
+  enhanceArticleImages(article);
   initSelectionShare(prose, postId);
 }
 

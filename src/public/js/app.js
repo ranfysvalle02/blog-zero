@@ -55,7 +55,8 @@ async function handleRoute() {
   if (view !== "article") cleanupArticleEnhancements();
 
   if (!initialLoad && document.startViewTransition) {
-    document.startViewTransition(() => updateRouteUi(view));
+    const t = document.startViewTransition(() => updateRouteUi(view));
+    t.finished.catch(() => {});
   } else {
     updateRouteUi(view);
   }
@@ -253,9 +254,6 @@ function injectConfig() {
     ? `<img src="${BLOG_CONFIG.brand.logo}" alt="" class="brand-logo">`
     : "";
   brand.innerHTML = `${logoHtml}<span>${esc(BLOG_CONFIG.brand.text)}</span>`;
-
-  const cta = $("#home-cta a");
-  if (cta) cta.textContent = BLOG_CONFIG.landing.ctaText + " \u2192";
 
   $("#btn-publish").textContent = UI_CONFIG.labels.publish;
   $("#btn-draft").textContent = UI_CONFIG.labels.saveDraft;

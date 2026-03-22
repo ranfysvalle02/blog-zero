@@ -44,7 +44,8 @@ export function showAuthPanel(mode) {
   const panel = $("#auth-panel");
   backdrop.classList.add("active");
   panel.classList.add("active");
-  panel.setAttribute("aria-hidden", "false");
+  panel.inert = false;
+  panel.removeAttribute("aria-hidden");
   document.body.style.overflow = "hidden";
 
   const isRegister = mode === "register";
@@ -63,9 +64,10 @@ export function showAuthPanel(mode) {
 }
 
 export function hideAuthPanel() {
+  if (document.activeElement?.closest("#auth-panel")) document.activeElement.blur();
   const panel = $("#auth-panel");
   panel.classList.remove("active");
-  panel.setAttribute("aria-hidden", "true");
+  panel.inert = true;
   document.body.style.overflow = "";
   if (backdrop) backdrop.classList.remove("active");
 }

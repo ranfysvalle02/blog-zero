@@ -60,8 +60,10 @@ export async function handleArticleRoute(id) {
   }
 
   const cover = extractCover(p.body || "");
+  const coverCaption = cover?.alt && cover.alt !== p.title
+    ? `<figcaption class="article-cover-caption">${esc(cover.alt)}</figcaption>` : "";
   const coverBanner = cover
-    ? `<div class="article-cover"><img src="${safeAttr(cover.src)}" alt="${esc(cover.alt || p.title)}" /></div>`
+    ? `<figure class="article-cover"><img src="${safeAttr(cover.src)}" alt="${esc(cover.alt || p.title)}" />${coverCaption}</figure>`
     : "";
   const proseBody = cover ? stripCover(p.body || "") : (p.body || "");
 

@@ -1,12 +1,10 @@
 import { $, UI_CONFIG, state, esc, md, toast, api, isAdmin, go, readTime, showConfirm } from "./utils.js";
-import { processImage, extractImageFiles } from "./image-util.js";
+import { processCoverImage, extractImageFiles } from "./image-util.js";
 
 const AUTOSAVE_KEY = "blog-zero-draft";
 const AUTOSAVE_IMGS_KEY = "blog-zero-draft-imgs";
 const AUTOSAVE_COVER_KEY = "blog-zero-draft-cover";
 const AUTOSAVE_DELAY = 2000;
-const MAX_INLINE_IMAGES = 4;
-const WARN_INLINE = 3;
 const DEFAULT_TAGS = ["Technology", "Design", "Life", "Tutorial", "Opinion", "News", "Engineering", "Product"];
 const IMG_TOKEN_RE = /!\[([^\]]*)\]\(img:(\d+)\)/g;
 const DATA_URI_IMG_RE = /!\[([^\]]*)\]\((data:image\/[^)]+)\)/g;
@@ -20,7 +18,6 @@ let _popularTags = [];
 
 let _coverImageId = null;
 let _coverAlt = "";
-let _replacingCover = false;
 
 /* ================================================================
    Image Store — tokens in the textarea, data in memory
@@ -69,59 +66,38 @@ function resetImageStore() {
   _coverAlt = "";
 }
 
-function setCoverFromInline(imgIndex) {
-  const ta = $("#compose-body");
-  const images = parseImageTokens(ta.value);
-  if (imgIndex < 0 || imgIndex >= images.length) return;
-  const img = images[imgIndex];
-
-  const stripped = (ta.value.substring(0, img.index) + ta.value.substring(img.index + img.markdown.length))
-    .replace(/\n{3,}/g, "\n\n").trim();
-
-  if (_coverImageId && _imageStore.has(_coverImageId)) {
-    const oldToken = `![${_coverAlt}](img:${_coverImageId})`;
-    ta.value = stripped ? stripped + "\n\n" + oldToken : oldToken;
-  } else {
-    ta.value = stripped;
-  }
-
-  _coverImageId = img.id;
-  _coverAlt = img.alt;
-  onBodyInput();
-}
-
 function removeCover() {
   if (!_coverImageId) return;
-  const ta = $("#compose-body");
-  const token = `![${_coverAlt}](img:${_coverImageId})`;
-  const body = ta.value.trim();
-  ta.value = body ? token + "\n\n" + body : token;
+  _imageStore.delete(_coverImageId);
   _coverImageId = null;
   _coverAlt = "";
-  onBodyInput();
+  updateCoverZone();
+  scheduleAutoSave();
+  setSaveStatus("Unsaved changes");
 }
 
 function setCoverDirect(dataUri, alt) {
-  if (_coverImageId) {
-    const ta = $("#compose-body");
-    const token = `![${_coverAlt}](img:${_coverImageId})`;
-    const body = ta.value.trim();
-    ta.value = body ? token + "\n\n" + body : token;
+  if (_coverImageId && _imageStore.has(_coverImageId)) {
+    _imageStore.delete(_coverImageId);
   }
   const id = storeImage(dataUri);
   _coverImageId = id;
   _coverAlt = alt || "Cover";
-  onBodyInput();
+  updateCoverZone();
+  scheduleAutoSave();
+  setSaveStatus("Unsaved changes");
 }
 
-function parseImageTokens(body) {
-  const images = [];
-  let m;
-  const re = new RegExp(IMG_TOKEN_RE.source, "g");
-  while ((m = re.exec(body)) !== null) {
-    images.push({ alt: m[1], id: Number(m[2]), markdown: m[0], index: m.index });
+function setCoverFromUrl(url, alt) {
+  if (_coverImageId && _imageStore.has(_coverImageId)) {
+    _imageStore.delete(_coverImageId);
   }
-  return images;
+  const id = storeImage(url);
+  _coverImageId = id;
+  _coverAlt = alt || "Cover";
+  updateCoverZone();
+  scheduleAutoSave();
+  setSaveStatus("Unsaved changes");
 }
 
 /* ================================================================
@@ -244,8 +220,8 @@ function populateForm(post) {
   }
 
   $("#compose-body").value = tokenizeDataUris(body);
+  updateCoverZone();
   updatePreview();
-  updateImageManager();
   $("#compose-edit-id").value = post._id;
   $("#compose-edit-hint").textContent = "Editing \u2022 " + (post.title || "untitled");
   autoGrow();
@@ -271,8 +247,8 @@ function populateFromObj(obj) {
   if (obj.editId) {
     $("#compose-edit-hint").textContent = "Editing \u2022 " + (obj.title || "untitled");
   }
+  updateCoverZone();
   updatePreview();
-  updateImageManager();
   autoGrow();
   updateStats();
 }
@@ -289,7 +265,7 @@ function clearForm() {
   $("#compose-edit-id").value = "";
   $("#compose-edit-hint").textContent = "";
   setSaveStatus("");
-  updateImageManager();
+  updateCoverZone();
   autoGrow();
   updateStats();
 }
@@ -308,6 +284,8 @@ function getFormData() {
    Submit — resolve tokens before sending
    ================================================================ */
 
+const MAX_PAYLOAD_BYTES = 950 * 1024;
+
 async function submitPost(status) {
   if (!isAdmin()) { toast("Admin access required", "err"); return; }
   const title = $("#compose-post-title").value.trim();
@@ -320,6 +298,13 @@ async function submitPost(status) {
   if (author) payload.author = author;
   if (body) payload.body = body;
   if (tags.length) payload.tags = tags;
+
+  const payloadSize = new Blob([JSON.stringify(payload)]).size;
+  if (payloadSize > MAX_PAYLOAD_BYTES) {
+    const sizeMB = (payloadSize / (1024 * 1024)).toFixed(1);
+    toast(`Post too large (${sizeMB} MB). Remove an image or use smaller images.`, "err");
+    return;
+  }
 
   const editId = $("#compose-edit-id").value;
   const r = editId
@@ -353,202 +338,35 @@ function updatePreview() {
   const proseHtml = resolved ? md(resolved) : "";
   $("#compose-preview").innerHTML = coverHtml + proseHtml ||
     '<span class="placeholder-text">Start writing to see a live preview...</span>';
-  updateImageManager();
+  updateCoverZone();
 }
 
 /* ================================================================
-   Image Manager — reads tokens + store for thumbnails
+   Cover Zone — dedicated UI above the title
    ================================================================ */
 
-function updateImageManager() {
-  const body = $("#compose-body").value;
-  const inlineImages = parseImageTokens(body);
+function updateCoverZone() {
+  const emptyEl = $("#compose-cover-empty");
+  const previewEl = $("#compose-cover-preview");
+  const imgEl = $("#compose-cover-img");
+  const captionEl = $("#compose-cover-caption");
+  if (!emptyEl || !previewEl) return;
+
   const hasCover = _coverImageId && _imageStore.has(_coverImageId);
-  const totalImages = inlineImages.length + (hasCover ? 1 : 0);
-
-  const slot = $("#compose-image-manager-slot");
-  if (!slot) return;
-
-  if (totalImages === 0) {
-    slot.innerHTML = `
-      <div class="cim cim-empty">
-        <div class="cim-header">
-          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/><path d="M21 15l-5-5L5 21"/></svg>
-          Images
-        </div>
-        <p class="cim-empty-text">Paste, drag, or use the toolbar to add images.<br>The first image automatically becomes the cover.</p>
-      </div>`;
-    return;
+  if (hasCover) {
+    emptyEl.classList.add("hidden");
+    previewEl.classList.remove("hidden");
+    const src = _imageStore.get(_coverImageId);
+    if (imgEl) { imgEl.src = src; imgEl.alt = _coverAlt || "Cover"; }
+    if (captionEl && captionEl !== document.activeElement) {
+      captionEl.value = _coverAlt || "";
+    }
+  } else {
+    emptyEl.classList.remove("hidden");
+    previewEl.classList.add("hidden");
+    if (imgEl) imgEl.src = "";
+    if (captionEl) captionEl.value = "";
   }
-
-  const coverSrc = hasCover ? _imageStore.get(_coverImageId) : "";
-  const coverSection = hasCover
-    ? `<div class="cim-cover">
-        <div class="cim-section-label">
-          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/></svg>
-          Cover Image
-        </div>
-        <div class="cim-cover-card">
-          <img src="${esc(coverSrc)}" alt="${esc(_coverAlt)}" />
-          <div class="cim-cover-meta">
-            <span class="cim-cover-alt">${esc(_coverAlt || "Cover")}</span>
-            <div class="cim-cover-actions">
-              <button class="cim-btn cim-btn-swap" id="cim-cover-swap" title="Replace cover" type="button">
-                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 2v6h-6M3 12a9 9 0 0115.36-6.36L21 8M3 22v-6h6M21 12a9 9 0 01-15.36 6.36L3 16"/></svg>
-                Replace
-              </button>
-              <button class="cim-btn cim-btn-remove" id="cim-cover-remove" title="Remove cover" type="button">&times; Remove</button>
-            </div>
-          </div>
-        </div>
-      </div>`
-    : `<div class="cim-cover cim-cover--empty">
-        <div class="cim-section-label">
-          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/></svg>
-          Cover Image
-        </div>
-        <p class="cim-cover-hint">Click <span class="cim-star-hint">&#9733;</span> on any image below to set it as cover, or add a new image.</p>
-      </div>`;
-
-  const budgetClass = inlineImages.length >= MAX_INLINE_IMAGES ? "budget-full" : inlineImages.length >= WARN_INLINE ? "budget-warn" : "";
-  const inlineCards = inlineImages.map((img, idx) => {
-    const src = _imageStore.get(img.id) || "";
-    const label = (img.alt || `Image ${idx + 1}`).slice(0, 28);
-    return `
-      <div class="cim-card" data-img-index="${idx}" draggable="true">
-        <img src="${esc(src)}" alt="${esc(img.alt)}" />
-        <div class="cim-card-bar">
-          <span class="cim-card-label" title="${esc(img.alt)}">${esc(label)}</span>
-          <div class="cim-card-btns">
-            <button class="cim-star" data-img-index="${idx}" title="Set as cover">&#9733;</button>
-            <button class="cim-remove" data-img-index="${idx}" title="Remove">&times;</button>
-          </div>
-        </div>
-      </div>`;
-  }).join("");
-
-  const inlineSection = `
-    <div class="cim-inline">
-      <div class="cim-section-label">
-        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/><path d="M21 15l-5-5L5 21"/></svg>
-        Post Images <span class="cim-budget ${budgetClass}">(${inlineImages.length}/${MAX_INLINE_IMAGES})</span>
-      </div>
-      ${inlineImages.length
-        ? `<div class="cim-grid">${inlineCards}</div>`
-        : `<p class="cim-empty-text">No inline images yet. Add images to your story.</p>`
-      }
-    </div>`;
-
-  slot.innerHTML = `<div class="cim" id="compose-image-manager">${coverSection}${inlineSection}</div>`;
-  bindImageManagerEvents();
-}
-
-function bindImageManagerEvents() {
-  const mgr = document.getElementById("compose-image-manager");
-  if (!mgr) return;
-
-  const coverRemoveBtn = mgr.querySelector("#cim-cover-remove");
-  if (coverRemoveBtn) coverRemoveBtn.addEventListener("click", removeCover);
-
-  const coverSwapBtn = mgr.querySelector("#cim-cover-swap");
-  if (coverSwapBtn) coverSwapBtn.addEventListener("click", () => { _replacingCover = true; $("#compose-file-input")?.click(); });
-
-  mgr.querySelectorAll(".cim-star").forEach((btn) => {
-    btn.addEventListener("click", (e) => {
-      e.stopPropagation();
-      setCoverFromInline(parseInt(btn.dataset.imgIndex));
-    });
-  });
-
-  mgr.querySelectorAll(".cim-remove").forEach((btn) => {
-    btn.addEventListener("click", (e) => {
-      e.stopPropagation();
-      removeImageByIndex(parseInt(btn.dataset.imgIndex));
-    });
-  });
-
-  const grid = mgr.querySelector(".cim-grid");
-  if (!grid) return;
-  let draggedIdx = null;
-  grid.querySelectorAll(".cim-card").forEach((card) => {
-    card.addEventListener("click", (e) => {
-      if (e.target.closest(".cim-star, .cim-remove")) return;
-      focusImageInEditor(parseInt(card.dataset.imgIndex, 10));
-    });
-    card.addEventListener("dragstart", () => { draggedIdx = parseInt(card.dataset.imgIndex); card.style.opacity = "0.4"; });
-    card.addEventListener("dragend", () => { card.style.opacity = "1"; });
-    card.addEventListener("dragover", (e) => {
-      e.preventDefault();
-      if (draggedIdx !== null && draggedIdx !== parseInt(card.dataset.imgIndex)) card.style.borderColor = "var(--accent-soft)";
-    });
-    card.addEventListener("dragleave", () => { card.style.borderColor = ""; });
-    card.addEventListener("drop", (e) => {
-      e.preventDefault();
-      card.style.borderColor = "";
-      const dropIdx = parseInt(card.dataset.imgIndex);
-      if (draggedIdx !== null && draggedIdx !== dropIdx) reorderImages(draggedIdx, dropIdx);
-      draggedIdx = null;
-    });
-  });
-}
-
-function focusImageInEditor(imgIndex) {
-  const ta = $("#compose-body");
-  if (!ta) return;
-  const images = parseImageTokens(ta.value);
-  if (imgIndex < 0 || imgIndex >= images.length) return;
-  const target = images[imgIndex];
-  ta.focus();
-  ta.selectionStart = target.index;
-  ta.selectionEnd = target.index + target.markdown.length;
-}
-
-function removeImageByIndex(imgIndex) {
-  const ta = $("#compose-body");
-  const images = parseImageTokens(ta.value);
-  if (imgIndex < 0 || imgIndex >= images.length) return;
-  const img = images[imgIndex];
-  _imageStore.delete(img.id);
-  ta.value = ta.value.substring(0, img.index) + ta.value.substring(img.index + img.markdown.length);
-  onBodyInput();
-}
-
-function reorderImages(fromIdx, toIdx) {
-  const body = $("#compose-body").value;
-  const images = parseImageTokens(body);
-  if (fromIdx < 0 || fromIdx >= images.length || toIdx < 0 || toIdx >= images.length) return;
-
-  let parts = [];
-  let last = 0;
-  images.forEach((img) => {
-    parts.push({ type: "t", content: body.substring(last, img.index) });
-    parts.push({ type: "i", content: img.markdown });
-    last = img.index + img.markdown.length;
-  });
-  parts.push({ type: "t", content: body.substring(last) });
-
-  const imgParts = parts.filter((p) => p.type === "i");
-  const [moved] = imgParts.splice(fromIdx, 1);
-  imgParts.splice(toIdx, 0, moved);
-
-  let newBody = "";
-  let ic = 0;
-  parts.forEach((p) => { newBody += p.type === "i" ? imgParts[ic++].content : p.content; });
-
-  $("#compose-body").value = newBody;
-  onBodyInput();
-}
-
-/* ================================================================
-   Image budget
-   ================================================================ */
-
-function countInlineImages() {
-  return parseImageTokens($("#compose-body").value).length;
-}
-
-function canAddInlineImages(count = 1) {
-  return countInlineImages() + count <= MAX_INLINE_IMAGES;
 }
 
 function updateStats() {
@@ -731,7 +549,7 @@ function execCommand(cmd) {
         insert = "[](url)"; sS = start + 1; sE = start + 1;
       } break;
     case "image":
-      $("#compose-file-input").click(); return;
+      toast("Use the Cover Image zone above to add an image", "info"); return;
     case "ul": {
       const items = (sel || "Item").split("\n").map((l) => "- " + l).join("\n");
       insert = items; sS = start; sE = start + insert.length; break;
@@ -750,89 +568,14 @@ function execCommand(cmd) {
   onBodyInput();
 }
 
-/* ================================================================
-   Image insertion — store data, insert clean token
-   ================================================================ */
-
-async function handleImageFiles(files) {
-  const ta = $("#compose-body");
-  if (!ta || !files.length) return;
-
-  if (_replacingCover) {
-    _replacingCover = false;
-    try {
-      const file = files[0];
-      const altText = file.name.replace(/\.[^.]+$/, "").replace(/[_-]+/g, " ");
-      const { dataUri } = await processImage(file);
-      setCoverDirect(dataUri, altText);
-      toast("Cover image replaced");
-    } catch (err) { toast(err.message || "Image processing failed", "err"); }
-    return;
-  }
-
-  const needsCover = !_coverImageId;
-  const fileArr = Array.from(files);
-
-  if (needsCover && fileArr.length === 1) {
-    try {
-      const file = fileArr[0];
-      const altText = file.name.replace(/\.[^.]+$/, "").replace(/[_-]+/g, " ");
-      const { dataUri } = await processImage(file);
-      setCoverDirect(dataUri, altText);
-      toast("Image set as cover");
-      return;
-    } catch (err) {
-      toast(err.message || "Image processing failed", "err");
-      return;
-    }
-  }
-
-  let coverHandled = false;
-  const inlineFiles = [];
-  for (const f of fileArr) {
-    if (needsCover && !coverHandled) { coverHandled = true; inlineFiles.push({ file: f, asCover: true }); }
-    else inlineFiles.push({ file: f, asCover: false });
-  }
-
-  const inlineOnly = inlineFiles.filter((f) => !f.asCover);
-  if (inlineOnly.length && !canAddInlineImages(inlineOnly.length)) {
-    const remaining = MAX_INLINE_IMAGES - countInlineImages();
-    if (remaining <= 0 && !needsCover) { toast(`Maximum ${MAX_INLINE_IMAGES} inline images per post`, "err"); return; }
-    if (remaining < inlineOnly.length) toast(`Only ${remaining} inline slot${remaining > 1 ? "s" : ""} remaining`, "err");
-  }
-
-  for (const { file, asCover } of inlineFiles) {
+async function handleCoverFile(file) {
+  if (!file) return;
+  try {
     const altText = file.name.replace(/\.[^.]+$/, "").replace(/[_-]+/g, " ");
-
-    if (asCover) {
-      try {
-        const { dataUri } = await processImage(file);
-        setCoverDirect(dataUri, altText);
-      } catch (err) { toast(err.message || "Image processing failed", "err"); }
-      continue;
-    }
-
-    if (!canAddInlineImages(1)) continue;
-
-    const placeholder = `![Uploading ${esc(file.name)}...]()`;
-    insertTextAtCursor(ta, placeholder);
-    onBodyInput();
-
-    try {
-      const { dataUri } = await processImage(file);
-      const id = storeImage(dataUri);
-      const token = `![${altText}](img:${id})`;
-      const pos = ta.value.indexOf(placeholder);
-      if (pos !== -1) {
-        ta.value = ta.value.substring(0, pos) + token + ta.value.substring(pos + placeholder.length);
-        ta.selectionStart = ta.selectionEnd = pos + token.length;
-      }
-      onBodyInput();
-    } catch (err) {
-      ta.value = ta.value.replace(placeholder, "");
-      toast(err.message || "Image processing failed", "err");
-      onBodyInput();
-    }
+    const { dataUri } = await processCoverImage(file);
+    setCoverDirect(dataUri, altText);
+  } catch (err) {
+    toast(err.message || "Image processing failed", "err");
   }
 }
 
@@ -850,7 +593,6 @@ function onBodyInput() {
   clearTimeout(_previewTimer);
   _previewTimer = setTimeout(() => {
     if (_currentMode === "preview") updatePreview();
-    else updateImageManager();
   }, 150);
   updateStats();
   autoGrow();
@@ -885,7 +627,7 @@ function handleKeydown(e) {
 
   const key = e.key.toLowerCase();
   if (e.shiftKey) {
-    const shiftCmds = { i: "image", e: "codeblock", ".": "quote" };
+    const shiftCmds = { e: "codeblock", ".": "quote" };
     if (shiftCmds[key]) { e.preventDefault(); execCommand(shiftCmds[key]); }
     return;
   }
@@ -904,7 +646,6 @@ function handleKeydown(e) {
 export function bindComposeEvents() {
   const body = $("#compose-body");
   const toolbar = $("#compose-toolbar");
-  const fileInput = $("#compose-file-input");
   const closeBtn = $("#compose-close");
   const previewBtn = $("#compose-preview-toggle");
 
@@ -943,10 +684,67 @@ export function bindComposeEvents() {
     if (btn) execCommand(btn.dataset.cmd);
   });
 
-  fileInput.addEventListener("change", () => {
-    if (fileInput.files.length) handleImageFiles([...fileInput.files]);
-    fileInput.value = "";
-  });
+  const coverZone = $("#compose-cover-zone");
+  const coverFile = $("#compose-cover-file");
+  const coverChangeBtn = $("#compose-cover-change");
+  const coverRemoveBtn2 = $("#compose-cover-remove-btn");
+
+  if (coverZone && coverFile) {
+    const openPicker = () => coverFile.click();
+    $("#compose-cover-empty")?.addEventListener("click", openPicker);
+    coverZone.addEventListener("keydown", (e) => {
+      if (e.target.closest("input, textarea, [contenteditable]")) return;
+      if (e.key === "Enter" || e.key === " ") { e.preventDefault(); openPicker(); }
+    });
+    if (coverChangeBtn) coverChangeBtn.addEventListener("click", (e) => { e.stopPropagation(); openPicker(); });
+    if (coverRemoveBtn2) coverRemoveBtn2.addEventListener("click", (e) => { e.stopPropagation(); removeCover(); });
+
+    coverFile.addEventListener("change", () => {
+      if (coverFile.files.length) handleCoverFile(coverFile.files[0]);
+      coverFile.value = "";
+    });
+
+    coverZone.addEventListener("dragover", (e) => { e.preventDefault(); coverZone.classList.add("dragover"); });
+    coverZone.addEventListener("dragleave", () => { coverZone.classList.remove("dragover"); });
+    coverZone.addEventListener("drop", (e) => {
+      e.preventDefault();
+      coverZone.classList.remove("dragover");
+      const files = extractImageFiles(e);
+      if (files.length) handleCoverFile(files[0]);
+    });
+
+    const coverCaption = $("#compose-cover-caption");
+    if (coverCaption) {
+      coverCaption.addEventListener("input", () => {
+        _coverAlt = coverCaption.value;
+        scheduleAutoSave();
+        setSaveStatus("Unsaved changes");
+      });
+      coverCaption.addEventListener("click", (e) => e.stopPropagation());
+      coverCaption.addEventListener("keydown", (e) => {
+        e.stopPropagation();
+        if (e.key === "Escape") coverCaption.blur();
+      });
+    }
+  }
+
+  const coverUrlInput = $("#compose-cover-url");
+  const coverUrlBtn = $("#compose-cover-url-go");
+  if (coverUrlInput && coverUrlBtn) {
+    const applyCoverUrl = () => {
+      const url = coverUrlInput.value.trim();
+      if (!url) return;
+      if (!/^https?:\/\/.+/i.test(url)) { toast("Enter a valid image URL (https://...)", "err"); return; }
+      setCoverFromUrl(url, "Cover");
+      coverUrlInput.value = "";
+    };
+    coverUrlBtn.addEventListener("click", (e) => { e.stopPropagation(); applyCoverUrl(); });
+    coverUrlInput.addEventListener("click", (e) => e.stopPropagation());
+    coverUrlInput.addEventListener("keydown", (e) => {
+      e.stopPropagation();
+      if (e.key === "Enter") { e.preventDefault(); applyCoverUrl(); }
+    });
+  }
 
   const tagPicker = $("#compose-tagpicker");
   if (tagPicker) {
@@ -979,24 +777,13 @@ export function bindComposeEvents() {
     });
   }
 
-  const writePane = $("#compose-write-pane");
-  const dropzone = $("#compose-dropzone");
-  let dragCounter = 0;
-
-  writePane.addEventListener("dragenter", (e) => { e.preventDefault(); dragCounter++; dropzone.classList.add("active"); });
-  writePane.addEventListener("dragleave", (e) => { e.preventDefault(); dragCounter--; if (dragCounter <= 0) { dragCounter = 0; dropzone.classList.remove("active"); } });
-  writePane.addEventListener("dragover", (e) => { e.preventDefault(); });
-  writePane.addEventListener("drop", (e) => {
-    e.preventDefault();
-    dragCounter = 0;
-    dropzone.classList.remove("active");
-    const files = extractImageFiles(e);
-    if (files.length) handleImageFiles(files);
-  });
-
   body.addEventListener("paste", (e) => {
     const files = extractImageFiles(e);
-    if (files.length) { e.preventDefault(); handleImageFiles(files); }
+    if (files.length) {
+      e.preventDefault();
+      if (_coverImageId) { toast("Cover image already set — remove it first to paste a new one", "info"); return; }
+      handleCoverFile(files[0]);
+    }
   });
 
   $("#compose-post-title").addEventListener("input", () => { scheduleAutoSave(); setSaveStatus("Unsaved changes"); });
