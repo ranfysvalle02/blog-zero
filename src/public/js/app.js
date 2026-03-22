@@ -240,7 +240,7 @@ function initHamburger() {
       if (authBtn.dataset.action === "sign-in") showAuthPanel("login");
       if (authBtn.dataset.action === "register") showAuthPanel("register");
       if (authBtn.dataset.action === "logout") {
-        import("./auth.js").then((m) => m.logout());
+        import("./auth.js").then((m) => m.logout()).catch(() => {});
       }
     }
   });
@@ -277,13 +277,13 @@ async function boot() {
 
   window.addEventListener("feed:refresh", () => {
     const v = location.hash.slice(1).split("/")[0] || "home";
-    if (v === "home") loadHome();
-    else if (v === "blog") loadBlog();
+    if (v === "home") loadHome().catch(() => {});
+    else if (v === "blog") loadBlog().catch(() => {});
   });
 
   await refreshSession();
-  window.addEventListener("hashchange", handleRoute);
-  handleRoute();
+  window.addEventListener("hashchange", () => handleRoute().catch(() => {}));
+  handleRoute().catch(() => {});
 
   const pendingAuth = localStorage.getItem("blog-zero-auth");
   if (pendingAuth) {

@@ -154,7 +154,7 @@ function injectCodeCopyButtons(prose) {
           btn.textContent = "Copy";
           btn.classList.remove("copied");
         }, 1500);
-      });
+      }).catch(() => {});
     });
     pre.appendChild(btn);
   });

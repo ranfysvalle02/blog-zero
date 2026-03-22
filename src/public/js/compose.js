@@ -115,7 +115,7 @@ export function handleComposeRoute(editId) {
     api("getPost", { pathParams: { id: editId } }).then((r) => {
       if (r.data?.data) populateForm(r.data.data);
       else { toast("Post not found", "err"); go("feed"); }
-    });
+    }).catch(() => { toast("Could not load post", "err"); go("feed"); });
     return;
   }
 
@@ -611,7 +611,7 @@ function handleKeydown(e) {
       message: "Any unsaved changes will be lost.",
       okLabel: "Discard & close",
       cancelLabel: "Keep editing",
-    }).then((yes) => { if (yes) go("feed"); });
+    }).then((yes) => { if (yes) go("feed"); }).catch(() => {});
     return;
   }
 
@@ -635,8 +635,8 @@ function handleKeydown(e) {
   if (key === "p") { e.preventDefault(); togglePreview(); return; }
   const cmds = { b: "bold", i: "italic", e: "code", k: "link" };
   if (cmds[key]) { e.preventDefault(); execCommand(cmds[key]); return; }
-  if (key === "s") { e.preventDefault(); submitPost("draft"); return; }
-  if (key === "enter") { e.preventDefault(); submitPost("published"); }
+  if (key === "s") { e.preventDefault(); submitPost("draft").catch(() => {}); return; }
+  if (key === "enter") { e.preventDefault(); submitPost("published").catch(() => {}); }
 }
 
 /* ================================================================
@@ -649,8 +649,8 @@ export function bindComposeEvents() {
   const closeBtn = $("#compose-close");
   const previewBtn = $("#compose-preview-toggle");
 
-  $("#btn-publish").addEventListener("click", () => submitPost("published"));
-  $("#btn-draft").addEventListener("click", () => submitPost("draft"));
+  $("#btn-publish").addEventListener("click", () => submitPost("published").catch(() => {}));
+  $("#btn-draft").addEventListener("click", () => submitPost("draft").catch(() => {}));
 
   if (closeBtn) {
     closeBtn.addEventListener("click", () => {
@@ -659,7 +659,7 @@ export function bindComposeEvents() {
         message: "Any unsaved changes will be lost.",
         okLabel: "Discard & close",
         cancelLabel: "Keep editing",
-      }).then((yes) => { if (yes) go("feed"); });
+      }).then((yes) => { if (yes) go("feed"); }).catch(() => {});
     });
   }
 

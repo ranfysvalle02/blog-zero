@@ -9,7 +9,7 @@
   <meta property="og:description" content="{{ seo.description }}">
   <meta property="og:type" content="{{ seo.og_type or 'article' }}">
   {% if seo.json_ld %}
-  <script type="application/ld+json">{{ seo.json_ld | safe }}</script>
+  <script type="application/ld+json">{{ seo.json_ld | replace("</", "<\\/") | safe }}</script>
   {% endif %}
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -67,7 +67,9 @@
           <span>LinkedIn</span>
         </a>
       </div>
-      <div class="prose">{{ post.body | default("", true) | safe }}</div>
+      <div class="prose" id="ssr-prose"></div>
+      <noscript><div class="prose">{{ post.body | default("", true) }}</div></noscript>
+      <script id="ssr-body" type="application/json">{{ post.body | default("", true) | tojson }}</script>
 
       {% if comments is defined %}
       <div class="comments">
@@ -108,5 +110,20 @@
       <a href="https://pypi.org/project/mdb-engine/" target="_blank" rel="noopener noreferrer">PyPI</a>
     </nav>
   </footer>
+
+  <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/dompurify/dist/purify.min.js"></script>
+  <script>
+    var raw = JSON.parse(document.getElementById("ssr-body").textContent);
+    marked.setOptions({ gfm: true, breaks: true });
+    DOMPurify.addHook("afterSanitizeAttributes", function(node) {
+      if (node.tagName === "A" && /^https?:\/\//i.test(node.getAttribute("href") || "")) {
+        node.setAttribute("target", "_blank");
+        node.setAttribute("rel", "noopener noreferrer");
+      }
+      if (node.tagName === "IMG") node.setAttribute("loading", "lazy");
+    });
+    document.getElementById("ssr-prose").innerHTML = DOMPurify.sanitize(marked.parse(raw || ""));
+  </script>
 </body>
 </html>

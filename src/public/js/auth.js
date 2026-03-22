@@ -111,10 +111,10 @@ export function bindAuthEvents() {
     if (!btn) return;
     if (btn.dataset.action === "sign-in") showAuthPanel("login");
     if (btn.dataset.action === "register") showAuthPanel("register");
-    if (btn.dataset.action === "logout") logout();
+    if (btn.dataset.action === "logout") logout().catch(() => {});
   });
 
-  $("#auth-submit").addEventListener("click", handleAuthSubmit);
+  $("#auth-submit").addEventListener("click", () => handleAuthSubmit().catch(() => {}));
 
   const closeBtn = $("#auth-close");
   if (closeBtn) closeBtn.addEventListener("click", hideAuthPanel);
@@ -128,7 +128,7 @@ export function bindAuthEvents() {
   });
 
   $("#auth-password").addEventListener("keydown", (e) => {
-    if (e.key === "Enter") handleAuthSubmit();
+    if (e.key === "Enter") handleAuthSubmit().catch(() => {});
   });
 
   document.addEventListener("keydown", (e) => {

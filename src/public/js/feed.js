@@ -80,7 +80,7 @@ export async function handleArticleRoute(id) {
 
   applyBgImages(contentEl);
   enhanceArticle(id);
-  if (UI_CONFIG.features.comments) loadComments(id);
+  if (UI_CONFIG.features.comments) loadComments(id).catch(() => {});
   return p;
 }
 
@@ -107,7 +107,7 @@ async function postComment() {
   if (!r.ok) { toast(r.data?.detail || "Could not submit comment", "err"); return; }
   bodyEl.value = "";
   toast(r.data?.data?.approved ? "Comment posted and visible" : "Comment submitted for approval", "info");
-  loadComments(state.currentPostId);
+  loadComments(state.currentPostId).catch(() => {});
 }
 
 export function bindArticleEvents() {
@@ -117,7 +117,7 @@ export function bindArticleEvents() {
     const btn = e.target.closest("[data-action]");
     if (!btn) return;
     e.preventDefault();
-    if (btn.dataset.action === "post-comment") postComment();
+    if (btn.dataset.action === "post-comment") postComment().catch(() => {});
     if (btn.dataset.action === "show-login") showAuthPanel("login");
     if (btn.dataset.action === "show-register") showAuthPanel("register");
     if (btn.dataset.action === "copy-link") {

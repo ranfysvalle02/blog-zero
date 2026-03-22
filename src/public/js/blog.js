@@ -67,10 +67,16 @@ function renderPosts() {
 
   const page = filtered.slice(0, visibleCount);
   const hasMore = filtered.length > visibleCount;
+  const remaining = filtered.length - page.length;
+  const pct = Math.round((page.length / filtered.length) * 100);
+
   container.innerHTML =
     `<div class="feed">${page.map((p) => renderCard(p)).join("")}</div>` +
-    (hasMore ? `<div class="load-more-wrap"><button class="btn btn-outline" id="load-more-btn">Load more</button></div>` : "") +
-    `<p class="post-count">Showing ${page.length} of ${filtered.length} post${filtered.length === 1 ? "" : "s"}</p>`;
+    `<div class="feed-pagination">` +
+      `<div class="feed-pag-bar"><div class="feed-pag-fill" style="width:${pct}%"></div></div>` +
+      `<p class="post-count">${page.length} of ${filtered.length} post${filtered.length === 1 ? "" : "s"}</p>` +
+      (hasMore ? `<button class="btn btn-outline" id="load-more-btn">Show ${Math.min(remaining, PAGE_SIZE)} more</button>` : "") +
+    `</div>`;
 
   applyBgImages(container);
 }

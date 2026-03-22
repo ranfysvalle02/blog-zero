@@ -1,10 +1,10 @@
 import { $, $$, state, setState, esc, fmtDate, toast, api, isAdmin, go } from "./utils.js";
 
 export function handleManageRoute() {
-  loadStats();
-  loadManage();
-  loadPendingComments();
-  loadAuditLog();
+  loadStats().catch(() => {});
+  loadManage().catch(() => {});
+  loadPendingComments().catch(() => {});
+  loadAuditLog().catch(() => {});
 }
 
 async function loadStats() {
@@ -121,7 +121,7 @@ export function bindManageEvents() {
     $$("#manage-tabs button").forEach((b) => b.classList.remove("active"));
     btn.classList.add("active");
     setState("manageScope", btn.dataset.scope);
-    loadManage();
+    loadManage().catch(() => {});
   });
 
   listEl.addEventListener("click", (e) => {
@@ -129,18 +129,18 @@ export function bindManageEvents() {
     if (!btn) return;
     const id = btn.dataset.id;
     if (btn.dataset.action === "edit") go(`compose/${id}`);
-    if (btn.dataset.action === "delete") deletePost(id);
-    if (btn.dataset.action === "publish") setPostStatus(id, "published");
-    if (btn.dataset.action === "archive") setPostStatus(id, "archived");
-    if (btn.dataset.action === "to-draft") setPostStatus(id, "draft");
-    if (btn.dataset.action === "restore") restorePost(id);
+    if (btn.dataset.action === "delete") deletePost(id).catch(() => {});
+    if (btn.dataset.action === "publish") setPostStatus(id, "published").catch(() => {});
+    if (btn.dataset.action === "archive") setPostStatus(id, "archived").catch(() => {});
+    if (btn.dataset.action === "to-draft") setPostStatus(id, "draft").catch(() => {});
+    if (btn.dataset.action === "restore") restorePost(id).catch(() => {});
   });
 
   pendingEl.addEventListener("click", (e) => {
     const btn = e.target.closest("[data-action]");
     if (!btn) return;
     const id = btn.dataset.id;
-    if (btn.dataset.action === "approve") approveComment(id, true);
-    if (btn.dataset.action === "keep-pending") approveComment(id, false);
+    if (btn.dataset.action === "approve") approveComment(id, true).catch(() => {});
+    if (btn.dataset.action === "keep-pending") approveComment(id, false).catch(() => {});
   });
 }
