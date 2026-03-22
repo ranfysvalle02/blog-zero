@@ -44,7 +44,7 @@
           "body":          { "type": "string" },
           "author":        { "type": "string" },
           "status":        { "type": "string", "enum": ["draft", "published", "archived"] },
-          "tags":          { "type": "array", "items": { "type": "string" } },
+          "tags":          { "type": "array", "items": { "type": "string", "x-values-from": { "collection": "tags", "field": "name" } } },
           "comment_count": { "type": "integer" }
         },
         "required": ["title"]

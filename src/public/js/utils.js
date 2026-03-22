@@ -164,7 +164,19 @@ export function excerpt(body, len = UI_CONFIG.layout.excerptLength) {
   return plain.length > len ? plain.slice(0, len) + "\u2026" : plain;
 }
 
-export function isAdmin() { return state.session?.user?.role === "admin"; }
+const ROLE_GRANTS = {
+  admin:     new Set(["admin", "editor", "moderator", "reader"]),
+  editor:    new Set(["editor", "reader"]),
+  moderator: new Set(["moderator", "reader"]),
+  reader:    new Set(["reader"]),
+};
+
+export function hasRole(required) {
+  const userRole = state.session?.user?.role;
+  return ROLE_GRANTS[userRole]?.has(required) ?? false;
+}
+
+export function isAdmin() { return hasRole("admin"); }
 export function isAuthed() { return !!state.session?.authenticated; }
 
 export function showConfirm({ title = "Are you sure?", message = "", okLabel = "Confirm", cancelLabel = "Cancel" } = {}) {

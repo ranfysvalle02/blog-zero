@@ -1,4 +1,4 @@
-import { $, UI_CONFIG, state, esc, md, toast, api, isAdmin, go, readTime, showConfirm } from "./utils.js";
+import { $, UI_CONFIG, state, esc, md, toast, api, hasRole, go, readTime, showConfirm } from "./utils.js";
 import { processCoverImage, extractImageFiles } from "./image-util.js";
 
 const AUTOSAVE_KEY = "blog-zero-draft";
@@ -287,7 +287,7 @@ function getFormData() {
 const MAX_PAYLOAD_BYTES = 950 * 1024;
 
 async function submitPost(status) {
-  if (!isAdmin()) { toast("Admin access required", "err"); return; }
+  if (!hasRole("editor")) { toast("Editor access required", "err"); return; }
   const title = $("#compose-post-title").value.trim();
   if (!title) { toast("Title is required", "err"); return; }
 

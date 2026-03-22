@@ -1,4 +1,4 @@
-import { $, $$, BLOG_CONFIG, UI_CONFIG, state, setState, esc, isAdmin, isAuthed } from "./utils.js";
+import { $, $$, BLOG_CONFIG, UI_CONFIG, state, setState, esc, hasRole, isAuthed } from "./utils.js";
 import { bindAuthEvents, refreshSession, showAuthPanel } from "./auth.js";
 import { bindArticleEvents, handleArticleRoute } from "./feed.js";
 import { cleanupArticleEnhancements } from "./article-enhance.js";
@@ -17,9 +17,13 @@ const routes = {
   manage: handleManageRoute,
 };
 
-function adminGuard(view) {
-  if (view !== "compose" && view !== "manage") return true;
-  if (!isAdmin()) {
+function roleGuard(view) {
+  if (view === "compose" && !hasRole("editor")) {
+    showAuthPanel("login");
+    location.hash = "home";
+    return false;
+  }
+  if (view === "manage" && !hasRole("editor") && !hasRole("moderator")) {
     showAuthPanel("login");
     location.hash = "home";
     return false;
@@ -50,7 +54,7 @@ async function handleRoute() {
   const raw = location.hash.slice(1) || "home";
   const [view, ...rest] = raw.split("/");
   const param = rest.join("/");
-  if (!adminGuard(view)) return;
+  if (!roleGuard(view)) return;
   setState("currentView", view);
   if (view !== "article") cleanupArticleEnhancements();
 
@@ -127,10 +131,8 @@ function initHamburger() {
       { label: "Blog", route: "blog" },
       { label: "About", href: "/public/about.html" },
     ];
-    if (isAdmin()) {
-      navItems.push({ label: "Write", route: "compose" });
-      navItems.push({ label: "Manage", route: "manage" });
-    }
+    if (hasRole("editor")) navItems.push({ label: "Write", route: "compose" });
+    if (hasRole("editor") || hasRole("moderator")) navItems.push({ label: "Manage", route: "manage" });
 
     const linksHtml = navItems.map((item) => {
       if (item.href) {

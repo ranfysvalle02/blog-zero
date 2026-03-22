@@ -1,4 +1,4 @@
-import { $, $$, state, setState, esc, fmtDate, toast, api, isAdmin, go } from "./utils.js";
+import { $, $$, state, setState, esc, fmtDate, toast, api, hasRole, isAdmin, go } from "./utils.js";
 
 export function handleManageRoute() {
   loadStats().catch(() => {});
@@ -24,7 +24,7 @@ async function loadStats() {
 }
 
 async function loadManage() {
-  if (!isAdmin()) return;
+  if (!hasRole("editor")) return;
   const isTrash = state.manageScope === "trash";
   const r = isTrash
     ? await api("listTrash")
@@ -74,7 +74,7 @@ async function restorePost(id) {
 }
 
 async function loadPendingComments() {
-  if (!isAdmin()) return;
+  if (!hasRole("moderator")) return;
   const r = await api("listComments", { params: { scope: "pending", sort: "-created_at", limit: "50" } });
   const items = r.data?.data || [];
   const pendingEl = $("#pending-comments");

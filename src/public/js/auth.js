@@ -1,4 +1,4 @@
-import { $, $$, UI_CONFIG, state, setState, esc, toast, api, isAuthed, isAdmin, go } from "./utils.js";
+import { $, $$, UI_CONFIG, state, setState, esc, toast, api, isAuthed, hasRole, go } from "./utils.js";
 
 let backdrop;
 
@@ -27,15 +27,16 @@ export function renderAuthArea() {
     area.innerHTML =
       `<button class="btn btn-outline btn-sm" data-action="sign-in">${esc(UI_CONFIG.labels.signIn)}</button>` +
       `<button class="btn btn-primary btn-sm" data-action="register">${esc(UI_CONFIG.labels.register)}</button>`;
-    $$(".admin-only").forEach((el) => el.classList.add("hidden"));
+    $$(".nav-role-writer").forEach((el) => el.classList.add("hidden"));
+    $$(".nav-role-staff").forEach((el) => el.classList.add("hidden"));
     return;
   }
   const u = state.session?.user || {};
   area.innerHTML =
     `<span class="auth-user">${esc(u.email)} (${esc(u.role || "guest")})</span>` +
     `<button class="btn btn-outline btn-sm" data-action="logout">${esc(UI_CONFIG.labels.logout)}</button>`;
-  if (isAdmin()) $$(".admin-only").forEach((el) => el.classList.remove("hidden"));
-  else $$(".admin-only").forEach((el) => el.classList.add("hidden"));
+  $$(".nav-role-writer").forEach((el) => el.classList.toggle("hidden", !hasRole("editor")));
+  $$(".nav-role-staff").forEach((el) => el.classList.toggle("hidden", !hasRole("editor") && !hasRole("moderator")));
 }
 
 export function showAuthPanel(mode) {
