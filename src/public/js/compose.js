@@ -1,21 +1,136 @@
-import { $, UI_CONFIG, state, esc, md, toast, api, isAdmin, go, readTime, extractCover, stripCover, showConfirm } from "./utils.js";
-import { processImage, processCoverImage, extractImageFiles } from "./image-util.js";
+import { $, UI_CONFIG, state, esc, md, toast, api, isAdmin, go, readTime, showConfirm } from "./utils.js";
+import { processImage, extractImageFiles } from "./image-util.js";
 
 const AUTOSAVE_KEY = "blog-zero-draft";
+const AUTOSAVE_IMGS_KEY = "blog-zero-draft-imgs";
+const AUTOSAVE_COVER_KEY = "blog-zero-draft-cover";
 const AUTOSAVE_DELAY = 2000;
-const MAX_IMAGES = 3;
-const WARN_IMAGES = 2;
+const MAX_INLINE_IMAGES = 4;
+const WARN_INLINE = 3;
+const DEFAULT_TAGS = ["Technology", "Design", "Life", "Tutorial", "Opinion", "News", "Engineering", "Product"];
+const IMG_TOKEN_RE = /!\[([^\]]*)\]\(img:(\d+)\)/g;
+const DATA_URI_IMG_RE = /!\[([^\]]*)\]\((data:image\/[^)]+)\)/g;
+const FIRST_IMG_RE = /^!\[([^\]]*)\]\(([^)]+)\)/;
+
 let _autosaveTimer = null;
 let _previewTimer = null;
 let _currentMode = "write";
-let _focusMode = false;
+let _selectedTags = new Set();
+let _popularTags = [];
+
+let _coverImageId = null;
+let _coverAlt = "";
+let _replacingCover = false;
+
+/* ================================================================
+   Image Store — tokens in the textarea, data in memory
+   ================================================================
+   The textarea shows:    ![photo](img:1)
+   The actual data URI lives in _imageStore.
+   On preview/submit, tokens are resolved back to data URIs.
+   ================================================================ */
+
+const _imageStore = new Map();
+let _imgCounter = 0;
+
+function storeImage(dataUri) {
+  const id = ++_imgCounter;
+  _imageStore.set(id, dataUri);
+  return id;
+}
+
+function resolveTokens(body) {
+  return body.replace(IMG_TOKEN_RE, (full, alt, id) => {
+    const data = _imageStore.get(Number(id));
+    return data ? `![${alt}](${data})` : full;
+  });
+}
+
+function tokenizeDataUris(body) {
+  return body.replace(DATA_URI_IMG_RE, (full, alt, dataUri) => {
+    const id = storeImage(dataUri);
+    return `![${alt}](img:${id})`;
+  });
+}
+
+function getResolvedBody() {
+  let body = resolveTokens($("#compose-body").value.trim());
+  if (_coverImageId) {
+    const src = _imageStore.get(_coverImageId);
+    if (src) body = `![${_coverAlt}](${src})\n\n${body}`;
+  }
+  return body;
+}
+
+function resetImageStore() {
+  _imageStore.clear();
+  _imgCounter = 0;
+  _coverImageId = null;
+  _coverAlt = "";
+}
+
+function setCoverFromInline(imgIndex) {
+  const ta = $("#compose-body");
+  const images = parseImageTokens(ta.value);
+  if (imgIndex < 0 || imgIndex >= images.length) return;
+  const img = images[imgIndex];
+
+  const stripped = (ta.value.substring(0, img.index) + ta.value.substring(img.index + img.markdown.length))
+    .replace(/\n{3,}/g, "\n\n").trim();
+
+  if (_coverImageId && _imageStore.has(_coverImageId)) {
+    const oldToken = `![${_coverAlt}](img:${_coverImageId})`;
+    ta.value = stripped ? stripped + "\n\n" + oldToken : oldToken;
+  } else {
+    ta.value = stripped;
+  }
+
+  _coverImageId = img.id;
+  _coverAlt = img.alt;
+  onBodyInput();
+}
+
+function removeCover() {
+  if (!_coverImageId) return;
+  const ta = $("#compose-body");
+  const token = `![${_coverAlt}](img:${_coverImageId})`;
+  const body = ta.value.trim();
+  ta.value = body ? token + "\n\n" + body : token;
+  _coverImageId = null;
+  _coverAlt = "";
+  onBodyInput();
+}
+
+function setCoverDirect(dataUri, alt) {
+  if (_coverImageId) {
+    const ta = $("#compose-body");
+    const token = `![${_coverAlt}](img:${_coverImageId})`;
+    const body = ta.value.trim();
+    ta.value = body ? token + "\n\n" + body : token;
+  }
+  const id = storeImage(dataUri);
+  _coverImageId = id;
+  _coverAlt = alt || "Cover";
+  onBodyInput();
+}
+
+function parseImageTokens(body) {
+  const images = [];
+  let m;
+  const re = new RegExp(IMG_TOKEN_RE.source, "g");
+  while ((m = re.exec(body)) !== null) {
+    images.push({ alt: m[1], id: Number(m[2]), markdown: m[0], index: m.index });
+  }
+  return images;
+}
 
 /* ================================================================
    Route handler
    ================================================================ */
 
 export function handleComposeRoute(editId) {
-  openComposeModal();
+  initAuthor();
+  loadPopularTags();
 
   if (editId) {
     clearAutoSave();
@@ -23,7 +138,7 @@ export function handleComposeRoute(editId) {
     if (cached) { populateForm(cached); return; }
     api("getPost", { pathParams: { id: editId } }).then((r) => {
       if (r.data?.data) populateForm(r.data.data);
-      else { toast("Post not found", "err"); closeComposeModal(); go("manage"); }
+      else { toast("Post not found", "err"); go("feed"); }
     });
     return;
   }
@@ -36,96 +151,101 @@ export function handleComposeRoute(editId) {
     clearForm();
   }
   autoGrow();
+  setTimeout(() => { const t = $("#compose-post-title"); if (t) t.focus(); }, 100);
 }
 
 /* ================================================================
-   Modal animations
+   Author auto-fill from session
    ================================================================ */
 
-function openComposeModal() {
-  const overlay = $("#compose-modal-overlay");
-  const container = $("#compose-modal-container");
-  const backdrop = $("#compose-modal-backdrop");
-  const closeBtn = $("#compose-modal-close");
-
-  if (!overlay || !container) return;
-
-  // Enable overlay
-  overlay.classList.add("active");
-  document.body.style.overflow = "hidden";
-
-  // Animate with GSAP for extra magic
-  if (window.gsap) {
-    gsap.fromTo(backdrop,
-      { opacity: 0 },
-      { opacity: 1, duration: 0.4, ease: "power2.out" }
-    );
-
-    gsap.fromTo(container,
-      { scale: 0.9, y: 30, opacity: 0 },
-      { scale: 1, y: 0, opacity: 1, duration: 0.6, ease: "back.out(1.4)" }
-    );
-
-    gsap.fromTo(closeBtn,
-      { scale: 0.5, rotation: -90, opacity: 0 },
-      { scale: 1, rotation: 0, opacity: 1, duration: 0.5, delay: 0.2, ease: "back.out(1.7)" }
-    );
-  }
-
-  // Focus title input after animation
-  setTimeout(() => {
-    const titleInput = $("#compose-post-title");
-    if (titleInput) titleInput.focus();
-  }, 400);
+function initAuthor() {
+  const input = $("#compose-author");
+  if (!input) return;
+  if (input.value) return;
+  const user = state.session?.user;
+  if (user) input.value = user.name || user.email?.split("@")[0] || "";
 }
 
-function closeComposeModal() {
-  const overlay = $("#compose-modal-overlay");
-  const container = $("#compose-modal-container");
-  const backdrop = $("#compose-modal-backdrop");
+/* ================================================================
+   Tag picker
+   ================================================================ */
 
-  if (!overlay || !container) return;
-
-  // Animate out with GSAP
-  if (window.gsap) {
-    gsap.to(container, {
-      scale: 0.95,
-      y: 20,
-      opacity: 0,
-      duration: 0.3,
-      ease: "power2.in"
-    });
-
-    gsap.to(backdrop, {
-      opacity: 0,
-      duration: 0.3,
-      ease: "power2.in",
-      onComplete: () => {
-        overlay.classList.remove("active");
-        document.body.style.overflow = "";
-      }
-    });
-  } else {
-    setTimeout(() => {
-      overlay.classList.remove("active");
-      document.body.style.overflow = "";
-    }, 300);
+async function loadPopularTags() {
+  try {
+    const res = await api("tagStats");
+    if (res.ok) {
+      const fromApi = (res.data?.data || res.data || [])
+        .filter((t) => t._id)
+        .sort((a, b) => b.count - a.count)
+        .slice(0, 12)
+        .map((t) => t._id);
+      _popularTags = [...new Set([...fromApi, ...DEFAULT_TAGS])].slice(0, 14);
+    } else {
+      _popularTags = [...DEFAULT_TAGS];
+    }
+  } catch {
+    _popularTags = [...DEFAULT_TAGS];
   }
+  renderTagPills();
 }
+
+function renderTagPills() {
+  const container = $("#compose-tag-pills");
+  if (!container) return;
+  const allTags = [...new Set([..._popularTags, ..._selectedTags])];
+  container.innerHTML = allTags.map((tag) => {
+    const sel = _selectedTags.has(tag) ? " selected" : "";
+    return `<button type="button" class="ev-tag${sel}" data-tag="${esc(tag)}">${esc(tag)}<span class="ev-tag-x">\u00d7</span></button>`;
+  }).join("");
+}
+
+function toggleTag(tag) {
+  _selectedTags.has(tag) ? _selectedTags.delete(tag) : _selectedTags.add(tag);
+  renderTagPills();
+  scheduleAutoSave();
+}
+
+function addCustomTag(raw) {
+  const tag = raw.trim().replace(/,/g, "");
+  if (!tag) return;
+  _selectedTags.add(tag);
+  renderTagPills();
+  scheduleAutoSave();
+}
+
+function setTagsFromArray(tags) {
+  _selectedTags = new Set(tags.filter(Boolean));
+  renderTagPills();
+}
+
+function getTagsArray() { return [..._selectedTags]; }
 
 /* ================================================================
    Form state
    ================================================================ */
 
 function populateForm(post) {
+  resetImageStore();
   $("#compose-post-title").value = post.title || "";
   $("#compose-author").value = post.author || "";
-  $("#compose-tags").value = (post.tags || []).join(", ");
-  const body = $("#compose-body");
-  body.value = post.body || "";
+  setTagsFromArray(post.tags || []);
+
+  let body = post.body || "";
+  const coverMatch = body.match(FIRST_IMG_RE);
+  if (coverMatch) {
+    const src = coverMatch[2];
+    _coverAlt = coverMatch[1];
+    if (src.startsWith("data:")) {
+      _coverImageId = storeImage(src);
+    } else {
+      _coverImageId = storeImage(src);
+    }
+    body = body.slice(coverMatch[0].length).replace(/^\s*\n/, "");
+  }
+
+  $("#compose-body").value = tokenizeDataUris(body);
   updatePreview();
   updateImageManager();
-  updateCoverPreview();
   $("#compose-edit-id").value = post._id;
   $("#compose-edit-hint").textContent = "Editing \u2022 " + (post.title || "untitled");
   autoGrow();
@@ -135,29 +255,41 @@ function populateForm(post) {
 function populateFromObj(obj) {
   $("#compose-post-title").value = obj.title || "";
   $("#compose-author").value = obj.author || "";
-  $("#compose-tags").value = obj.tags || "";
-  $("#compose-body").value = obj.body || "";
+  if (obj.tags) {
+    const tags = typeof obj.tags === "string"
+      ? obj.tags.split(",").map((t) => t.trim()).filter(Boolean) : obj.tags;
+    setTagsFromArray(tags);
+  }
+  restoreImageStore();
+  restoreCover();
+  const bodyRaw = obj.body || "";
+  const hasDataUris = DATA_URI_IMG_RE.test(bodyRaw);
+  DATA_URI_IMG_RE.lastIndex = 0;
+  $("#compose-body").value = hasDataUris ? tokenizeDataUris(bodyRaw) : bodyRaw;
+
   $("#compose-edit-id").value = obj.editId || "";
   if (obj.editId) {
     $("#compose-edit-hint").textContent = "Editing \u2022 " + (obj.title || "untitled");
   }
   updatePreview();
   updateImageManager();
-  updateCoverPreview();
   autoGrow();
   updateStats();
 }
 
 function clearForm() {
+  resetImageStore();
+  togglePreview("write");
   $("#compose-post-title").value = "";
-  $("#compose-author").value = "";
-  $("#compose-tags").value = "";
+  initAuthor();
+  _selectedTags.clear();
+  renderTagPills();
   $("#compose-body").value = "";
   $("#compose-preview").innerHTML = '<span class="placeholder-text">Start writing to see a live preview...</span>';
   $("#compose-edit-id").value = "";
   $("#compose-edit-hint").textContent = "";
   setSaveStatus("");
-  updateCoverPreview();
+  updateImageManager();
   autoGrow();
   updateStats();
 }
@@ -166,14 +298,14 @@ function getFormData() {
   return {
     title: $("#compose-post-title").value,
     author: $("#compose-author").value,
-    tags: $("#compose-tags").value,
+    tags: getTagsArray(),
     body: $("#compose-body").value,
     editId: $("#compose-edit-id").value,
   };
 }
 
 /* ================================================================
-   Submit
+   Submit — resolve tokens before sending
    ================================================================ */
 
 async function submitPost(status) {
@@ -183,8 +315,8 @@ async function submitPost(status) {
 
   const payload = { title, status };
   const author = $("#compose-author").value.trim();
-  const body = $("#compose-body").value.trim();
-  const tags = $("#compose-tags").value.split(",").map((t) => t.trim()).filter(Boolean);
+  const body = getResolvedBody();
+  const tags = getTagsArray();
   if (author) payload.author = author;
   if (body) payload.body = body;
   if (tags.length) payload.tags = tags;
@@ -198,279 +330,225 @@ async function submitPost(status) {
   toast(editId ? "Post updated" : status === "published" ? "Published!" : "Draft saved");
   clearAutoSave();
   clearForm();
-  closeComposeModal();
-  setTimeout(() => {
-    go("feed");
-    window.dispatchEvent(new Event("feed:refresh"));
-  }, 300);
+  go("feed");
+  window.dispatchEvent(new Event("feed:refresh"));
 }
 
 /* ================================================================
-   Preview + stats
+   Preview — resolve tokens before rendering
    ================================================================ */
 
 function updatePreview() {
-  const val = $("#compose-body").value;
-  $("#compose-preview").innerHTML = val
-    ? md(val)
-    : '<span class="placeholder-text">Start writing to see a live preview...</span>';
+  const raw = $("#compose-body").value;
+  const resolved = resolveTokens(raw);
+
+  let coverHtml = "";
+  if (_coverImageId) {
+    const src = _imageStore.get(_coverImageId);
+    if (src) {
+      coverHtml = `<div class="preview-cover"><img src="${src}" alt="${esc(_coverAlt || "Cover")}" /><span class="preview-cover-badge">Cover</span></div>`;
+    }
+  }
+
+  const proseHtml = resolved ? md(resolved) : "";
+  $("#compose-preview").innerHTML = coverHtml + proseHtml ||
+    '<span class="placeholder-text">Start writing to see a live preview...</span>';
   updateImageManager();
 }
 
 /* ================================================================
-   Image Manager (Visual image organization)
+   Image Manager — reads tokens + store for thumbnails
    ================================================================ */
 
 function updateImageManager() {
   const body = $("#compose-body").value;
-  const imageRegex = /!\[([^\]]*)\]\(([^)]+)\)/g;
-  const images = [];
-  let match;
+  const inlineImages = parseImageTokens(body);
+  const hasCover = _coverImageId && _imageStore.has(_coverImageId);
+  const totalImages = inlineImages.length + (hasCover ? 1 : 0);
 
-  while ((match = imageRegex.exec(body)) !== null) {
-    images.push({
-      alt: match[1],
-      src: match[2],
-      markdown: match[0],
-      index: match.index
-    });
-  }
+  const slot = $("#compose-image-manager-slot");
+  if (!slot) return;
 
-  let managerEl = $("#compose-image-manager");
-
-  if (images.length === 0) {
-    if (managerEl) managerEl.remove();
+  if (totalImages === 0) {
+    slot.innerHTML = `
+      <div class="cim cim-empty">
+        <div class="cim-header">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/><path d="M21 15l-5-5L5 21"/></svg>
+          Images
+        </div>
+        <p class="cim-empty-text">Paste, drag, or use the toolbar to add images.<br>The first image automatically becomes the cover.</p>
+      </div>`;
     return;
   }
 
-  if (!managerEl) {
-    managerEl = document.createElement("div");
-    managerEl.id = "compose-image-manager";
-    managerEl.className = "compose-image-manager";
-    const writePane = $("#compose-write-pane");
-    writePane.insertBefore(managerEl, writePane.firstChild);
-  }
+  const coverSrc = hasCover ? _imageStore.get(_coverImageId) : "";
+  const coverSection = hasCover
+    ? `<div class="cim-cover">
+        <div class="cim-section-label">
+          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/></svg>
+          Cover Image
+        </div>
+        <div class="cim-cover-card">
+          <img src="${esc(coverSrc)}" alt="${esc(_coverAlt)}" />
+          <div class="cim-cover-meta">
+            <span class="cim-cover-alt">${esc(_coverAlt || "Cover")}</span>
+            <div class="cim-cover-actions">
+              <button class="cim-btn cim-btn-swap" id="cim-cover-swap" title="Replace cover" type="button">
+                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 2v6h-6M3 12a9 9 0 0115.36-6.36L21 8M3 22v-6h6M21 12a9 9 0 01-15.36 6.36L3 16"/></svg>
+                Replace
+              </button>
+              <button class="cim-btn cim-btn-remove" id="cim-cover-remove" title="Remove cover" type="button">&times; Remove</button>
+            </div>
+          </div>
+        </div>
+      </div>`
+    : `<div class="cim-cover cim-cover--empty">
+        <div class="cim-section-label">
+          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/></svg>
+          Cover Image
+        </div>
+        <p class="cim-cover-hint">Click <span class="cim-star-hint">&#9733;</span> on any image below to set it as cover, or add a new image.</p>
+      </div>`;
 
-  const gridHtml = images.map((img, idx) => {
-    const safeSrc = img.src.length > 100 ? img.src.substring(0, 100) + "..." : img.src;
+  const budgetClass = inlineImages.length >= MAX_INLINE_IMAGES ? "budget-full" : inlineImages.length >= WARN_INLINE ? "budget-warn" : "";
+  const inlineCards = inlineImages.map((img, idx) => {
+    const src = _imageStore.get(img.id) || "";
+    const label = (img.alt || `Image ${idx + 1}`).slice(0, 28);
     return `
-      <div class="compose-image-preview" data-img-index="${idx}" draggable="true">
-        <img src="${esc(img.src)}" alt="${esc(img.alt)}" />
-        <button class="compose-image-preview-remove" data-img-index="${idx}" title="Remove image">×</button>
-      </div>
-    `;
+      <div class="cim-card" data-img-index="${idx}" draggable="true">
+        <img src="${esc(src)}" alt="${esc(img.alt)}" />
+        <div class="cim-card-bar">
+          <span class="cim-card-label" title="${esc(img.alt)}">${esc(label)}</span>
+          <div class="cim-card-btns">
+            <button class="cim-star" data-img-index="${idx}" title="Set as cover">&#9733;</button>
+            <button class="cim-remove" data-img-index="${idx}" title="Remove">&times;</button>
+          </div>
+        </div>
+      </div>`;
   }).join("");
 
-  const budgetClass = images.length >= MAX_IMAGES ? "budget-full" : images.length >= WARN_IMAGES ? "budget-warn" : "";
+  const inlineSection = `
+    <div class="cim-inline">
+      <div class="cim-section-label">
+        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/><path d="M21 15l-5-5L5 21"/></svg>
+        Post Images <span class="cim-budget ${budgetClass}">(${inlineImages.length}/${MAX_INLINE_IMAGES})</span>
+      </div>
+      ${inlineImages.length
+        ? `<div class="cim-grid">${inlineCards}</div>`
+        : `<p class="cim-empty-text">No inline images yet. Add images to your story.</p>`
+      }
+    </div>`;
 
-  managerEl.innerHTML = `
-    <div class="compose-image-manager-title">
-      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-        <rect x="3" y="3" width="18" height="18" rx="2"/>
-        <circle cx="8.5" cy="8.5" r="1.5"/>
-        <path d="M21 15l-5-5L5 21"/>
-      </svg>
-      Images in Post <span class="image-budget ${budgetClass}">(${images.length}/${MAX_IMAGES})</span>
-    </div>
-    <div class="compose-image-grid" id="compose-image-grid">
-      ${gridHtml}
-    </div>
-  `;
-
+  slot.innerHTML = `<div class="cim" id="compose-image-manager">${coverSection}${inlineSection}</div>`;
   bindImageManagerEvents();
 }
 
 function bindImageManagerEvents() {
-  const grid = $("#compose-image-grid");
-  if (!grid) return;
+  const mgr = document.getElementById("compose-image-manager");
+  if (!mgr) return;
 
-  // Remove image
-  grid.querySelectorAll(".compose-image-preview-remove").forEach((btn) => {
+  const coverRemoveBtn = mgr.querySelector("#cim-cover-remove");
+  if (coverRemoveBtn) coverRemoveBtn.addEventListener("click", removeCover);
+
+  const coverSwapBtn = mgr.querySelector("#cim-cover-swap");
+  if (coverSwapBtn) coverSwapBtn.addEventListener("click", () => { _replacingCover = true; $("#compose-file-input")?.click(); });
+
+  mgr.querySelectorAll(".cim-star").forEach((btn) => {
     btn.addEventListener("click", (e) => {
       e.stopPropagation();
-      const idx = parseInt(btn.dataset.imgIndex);
-      removeImageFromMarkdown(idx);
+      setCoverFromInline(parseInt(btn.dataset.imgIndex));
     });
   });
 
-  // Drag and drop reordering
+  mgr.querySelectorAll(".cim-remove").forEach((btn) => {
+    btn.addEventListener("click", (e) => {
+      e.stopPropagation();
+      removeImageByIndex(parseInt(btn.dataset.imgIndex));
+    });
+  });
+
+  const grid = mgr.querySelector(".cim-grid");
+  if (!grid) return;
   let draggedIdx = null;
-
-  grid.querySelectorAll(".compose-image-preview").forEach((preview) => {
-    preview.addEventListener("dragstart", (e) => {
-      draggedIdx = parseInt(preview.dataset.imgIndex);
-      preview.style.opacity = "0.5";
+  grid.querySelectorAll(".cim-card").forEach((card) => {
+    card.addEventListener("click", (e) => {
+      if (e.target.closest(".cim-star, .cim-remove")) return;
+      focusImageInEditor(parseInt(card.dataset.imgIndex, 10));
     });
-
-    preview.addEventListener("dragend", (e) => {
-      preview.style.opacity = "1";
-    });
-
-    preview.addEventListener("dragover", (e) => {
+    card.addEventListener("dragstart", () => { draggedIdx = parseInt(card.dataset.imgIndex); card.style.opacity = "0.4"; });
+    card.addEventListener("dragend", () => { card.style.opacity = "1"; });
+    card.addEventListener("dragover", (e) => {
       e.preventDefault();
-      const dropIdx = parseInt(preview.dataset.imgIndex);
-      if (draggedIdx !== null && draggedIdx !== dropIdx) {
-        preview.style.borderColor = "var(--accent)";
-      }
+      if (draggedIdx !== null && draggedIdx !== parseInt(card.dataset.imgIndex)) card.style.borderColor = "var(--accent-soft)";
     });
-
-    preview.addEventListener("dragleave", (e) => {
-      preview.style.borderColor = "";
-    });
-
-    preview.addEventListener("drop", (e) => {
+    card.addEventListener("dragleave", () => { card.style.borderColor = ""; });
+    card.addEventListener("drop", (e) => {
       e.preventDefault();
-      preview.style.borderColor = "";
-      const dropIdx = parseInt(preview.dataset.imgIndex);
-      if (draggedIdx !== null && draggedIdx !== dropIdx) {
-        reorderImages(draggedIdx, dropIdx);
-      }
+      card.style.borderColor = "";
+      const dropIdx = parseInt(card.dataset.imgIndex);
+      if (draggedIdx !== null && draggedIdx !== dropIdx) reorderImages(draggedIdx, dropIdx);
       draggedIdx = null;
     });
   });
 }
 
-function removeImageFromMarkdown(imgIndex) {
-  const body = $("#compose-body").value;
-  const imageRegex = /!\[([^\]]*)\]\(([^)]+)\)/g;
-  const images = [];
-  let match;
-
-  while ((match = imageRegex.exec(body)) !== null) {
-    images.push({
-      markdown: match[0],
-      index: match.index
-    });
-  }
-
+function focusImageInEditor(imgIndex) {
+  const ta = $("#compose-body");
+  if (!ta) return;
+  const images = parseImageTokens(ta.value);
   if (imgIndex < 0 || imgIndex >= images.length) return;
+  const target = images[imgIndex];
+  ta.focus();
+  ta.selectionStart = target.index;
+  ta.selectionEnd = target.index + target.markdown.length;
+}
 
-  const imgToRemove = images[imgIndex];
-  const newBody = body.substring(0, imgToRemove.index) + body.substring(imgToRemove.index + imgToRemove.markdown.length);
-
-  $("#compose-body").value = newBody;
+function removeImageByIndex(imgIndex) {
+  const ta = $("#compose-body");
+  const images = parseImageTokens(ta.value);
+  if (imgIndex < 0 || imgIndex >= images.length) return;
+  const img = images[imgIndex];
+  _imageStore.delete(img.id);
+  ta.value = ta.value.substring(0, img.index) + ta.value.substring(img.index + img.markdown.length);
   onBodyInput();
 }
 
 function reorderImages(fromIdx, toIdx) {
   const body = $("#compose-body").value;
-  const imageRegex = /!\[([^\]]*)\]\(([^)]+)\)/g;
-  const images = [];
-  let match;
-
-  while ((match = imageRegex.exec(body)) !== null) {
-    images.push({
-      markdown: match[0],
-      index: match.index
-    });
-  }
-
+  const images = parseImageTokens(body);
   if (fromIdx < 0 || fromIdx >= images.length || toIdx < 0 || toIdx >= images.length) return;
 
-  // Extract non-image content and images separately
-  let bodyParts = [];
-  let lastIndex = 0;
-
+  let parts = [];
+  let last = 0;
   images.forEach((img) => {
-    bodyParts.push({
-      type: "text",
-      content: body.substring(lastIndex, img.index)
-    });
-    bodyParts.push({
-      type: "image",
-      content: img.markdown
-    });
-    lastIndex = img.index + img.markdown.length;
+    parts.push({ type: "t", content: body.substring(last, img.index) });
+    parts.push({ type: "i", content: img.markdown });
+    last = img.index + img.markdown.length;
   });
-  bodyParts.push({
-    type: "text",
-    content: body.substring(lastIndex)
-  });
+  parts.push({ type: "t", content: body.substring(last) });
 
-  // Find image parts and reorder
-  const imageParts = bodyParts.filter(p => p.type === "image");
-  const [movedImage] = imageParts.splice(fromIdx, 1);
-  imageParts.splice(toIdx, 0, movedImage);
+  const imgParts = parts.filter((p) => p.type === "i");
+  const [moved] = imgParts.splice(fromIdx, 1);
+  imgParts.splice(toIdx, 0, moved);
 
-  // Rebuild markdown with reordered images
   let newBody = "";
-  let imgCounter = 0;
-
-  bodyParts.forEach((part) => {
-    if (part.type === "image") {
-      newBody += imageParts[imgCounter].content;
-      imgCounter++;
-    } else {
-      newBody += part.content;
-    }
-  });
+  let ic = 0;
+  parts.forEach((p) => { newBody += p.type === "i" ? imgParts[ic++].content : p.content; });
 
   $("#compose-body").value = newBody;
   onBodyInput();
 }
 
 /* ================================================================
-   Cover image picker
+   Image budget
    ================================================================ */
 
-function updateCoverPreview() {
-  const body = $("#compose-body").value;
-  const cover = extractCover(body);
-  const emptyEl = $("#compose-cover-empty");
-  const previewEl = $("#compose-cover-preview");
-  const img = $("#compose-cover-img");
-
-  if (cover) {
-    emptyEl.classList.add("hidden");
-    previewEl.classList.remove("hidden");
-    img.src = cover.src;
-    img.alt = cover.alt || "Cover";
-  } else {
-    emptyEl.classList.remove("hidden");
-    previewEl.classList.add("hidden");
-    img.src = "";
-  }
+function countInlineImages() {
+  return parseImageTokens($("#compose-body").value).length;
 }
 
-async function setCoverImage(file) {
-  try {
-    const { dataUri } = await processCoverImage(file);
-    const altText = file.name.replace(/\.[^.]+$/, "").replace(/[_-]+/g, " ");
-    const coverMd = `![${altText}](${dataUri})`;
-    const ta = $("#compose-body");
-
-    const existing = extractCover(ta.value);
-    if (existing) {
-      ta.value = ta.value.replace(/^!\[([^\]]*)\]\(([^)]+)\)\s*\n?/, coverMd + "\n");
-    } else {
-      ta.value = coverMd + "\n\n" + ta.value;
-    }
-    onBodyInput();
-    updateCoverPreview();
-  } catch (err) {
-    toast(err.message || "Cover image failed", "err");
-  }
-}
-
-function removeCoverImage() {
-  const ta = $("#compose-body");
-  ta.value = stripCover(ta.value);
-  onBodyInput();
-  updateCoverPreview();
-}
-
-/* ================================================================
-   Image budget helpers
-   ================================================================ */
-
-function countImages() {
-  const body = $("#compose-body").value;
-  const matches = body.match(/!\[([^\]]*)\]\(([^)]+)\)/g);
-  return matches ? matches.length : 0;
-}
-
-function canAddImages(count = 1) {
-  return countImages() + count <= MAX_IMAGES;
+function canAddInlineImages(count = 1) {
+  return countInlineImages() + count <= MAX_INLINE_IMAGES;
 }
 
 function updateStats() {
@@ -481,7 +559,7 @@ function updateStats() {
 }
 
 /* ================================================================
-   Auto-grow textarea
+   Auto-grow
    ================================================================ */
 
 function autoGrow() {
@@ -492,7 +570,7 @@ function autoGrow() {
 }
 
 /* ================================================================
-   Auto-save to localStorage
+   Auto-save — saves both form data and image store
    ================================================================ */
 
 function scheduleAutoSave() {
@@ -501,50 +579,91 @@ function scheduleAutoSave() {
     const data = getFormData();
     if (!data.title && !data.body) return;
     localStorage.setItem(AUTOSAVE_KEY, JSON.stringify(data));
+    persistImageStore();
     setSaveStatus("Auto-saved");
   }, AUTOSAVE_DELAY);
 }
 
+function persistImageStore() {
+  const entries = [..._imageStore.entries()];
+  if (entries.length) {
+    localStorage.setItem(AUTOSAVE_IMGS_KEY, JSON.stringify(entries));
+  } else {
+    localStorage.removeItem(AUTOSAVE_IMGS_KEY);
+  }
+  if (_coverImageId) {
+    localStorage.setItem(AUTOSAVE_COVER_KEY, JSON.stringify({ id: _coverImageId, alt: _coverAlt }));
+  } else {
+    localStorage.removeItem(AUTOSAVE_COVER_KEY);
+  }
+}
+
+function restoreImageStore() {
+  try {
+    const raw = localStorage.getItem(AUTOSAVE_IMGS_KEY);
+    if (!raw) return;
+    const entries = JSON.parse(raw);
+    resetImageStore();
+    for (const [id, data] of entries) {
+      _imageStore.set(id, data);
+      if (id >= _imgCounter) _imgCounter = id;
+    }
+  } catch { /* ignore corrupt data */ }
+}
+
+function restoreCover() {
+  try {
+    const raw = localStorage.getItem(AUTOSAVE_COVER_KEY);
+    if (!raw) return;
+    const data = JSON.parse(raw);
+    if (data.id && _imageStore.has(data.id)) {
+      _coverImageId = data.id;
+      _coverAlt = data.alt || "";
+    }
+  } catch { /* ignore corrupt data */ }
+}
+
 function loadAutoSave() {
-  try { return JSON.parse(localStorage.getItem(AUTOSAVE_KEY)); }
-  catch { return null; }
+  try { return JSON.parse(localStorage.getItem(AUTOSAVE_KEY)); } catch { return null; }
 }
 
 function clearAutoSave() {
   localStorage.removeItem(AUTOSAVE_KEY);
+  localStorage.removeItem(AUTOSAVE_IMGS_KEY);
+  localStorage.removeItem(AUTOSAVE_COVER_KEY);
   clearTimeout(_autosaveTimer);
 }
 
 function setSaveStatus(text) {
   const el = $("#compose-save-status");
-  if (el) el.textContent = text;
+  if (el) el.textContent = text ? ` \u00b7 ${text}` : "";
 }
 
 /* ================================================================
-   Editor modes: write / split / preview
+   Preview toggle
    ================================================================ */
 
-function setMode(mode) {
-  _currentMode = mode;
-  const editor = $("#compose-editor");
+function togglePreview(forceMode) {
+  const next = forceMode || (_currentMode === "write" ? "preview" : "write");
+  _currentMode = next;
+
+  const surface = $("#compose-editor");
   const root = $("#compose-root");
-  if (!editor) return;
-  editor.dataset.mode = mode;
+  const btn = $("#compose-preview-toggle");
+  const label = $("#compose-preview-label");
+  if (surface) surface.dataset.mode = next;
+  if (root) root.dataset.mode = next;
 
-  if (mode === "split") {
-    root.setAttribute("data-has-split", "");
+  const isPrev = next === "preview";
+  if (btn) btn.classList.toggle("active", isPrev);
+  if (label) label.textContent = isPrev ? "Edit" : "Preview";
+  btn?.querySelector(".ev-icon-eye")?.classList.toggle("hidden", isPrev);
+  btn?.querySelector(".ev-icon-pen")?.classList.toggle("hidden", !isPrev);
+
+  if (isPrev) {
+    updatePreview();
+    $("#compose-canvas")?.scrollTo(0, 0);
   } else {
-    root.removeAttribute("data-has-split");
-  }
-
-  $$("#compose-modes [data-mode]").forEach((btn) => {
-    const on = btn.dataset.mode === mode;
-    btn.classList.toggle("active", on);
-    btn.setAttribute("aria-selected", String(on));
-  });
-
-  if (mode === "preview" || mode === "split") updatePreview();
-  if (mode === "write") {
     const ta = $("#compose-body");
     if (ta) { ta.focus(); autoGrow(); }
   }
@@ -553,24 +672,7 @@ function setMode(mode) {
 function $$(sel) { return [...document.querySelectorAll(sel)]; }
 
 /* ================================================================
-   Focus mode
-   ================================================================ */
-
-function toggleFocusMode() {
-  _focusMode = !_focusMode;
-  document.body.classList.toggle("compose-focus-active", _focusMode);
-  const btn = $("#compose-focus");
-  if (_focusMode) {
-    btn.innerHTML = '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 14v6h6M20 10V4h-6M14 10l7-7M3 21l7-7"/></svg>';
-    btn.title = "Exit focus mode (Esc)";
-  } else {
-    btn.innerHTML = '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M15 3h6v6M9 21H3v-6M21 3l-7 7M3 21l7-7"/></svg>';
-    btn.title = "Focus mode";
-  }
-}
-
-/* ================================================================
-   Markdown toolbar commands
+   Markdown toolbar
    ================================================================ */
 
 function execCommand(cmd) {
@@ -582,136 +684,148 @@ function execCommand(cmd) {
   const sel = ta.value.substring(start, end);
   const before = ta.value.substring(0, start);
   const after = ta.value.substring(end);
-
   let insert, sS, sE;
 
   switch (cmd) {
     case "bold":
       insert = sel ? `**${sel}**` : "****";
-      sS = start + 2;
-      sE = start + 2 + (sel ? sel.length : 0);
-      break;
+      sS = start + 2; sE = start + 2 + (sel ? sel.length : 0); break;
     case "italic":
       insert = sel ? `*${sel}*` : "**";
-      sS = start + 1;
-      sE = start + 1 + (sel ? sel.length : 0);
-      break;
+      sS = start + 1; sE = start + 1 + (sel ? sel.length : 0); break;
     case "heading": {
       const lineStart = before.lastIndexOf("\n") + 1;
       const lineBefore = before.substring(lineStart);
       if (lineBefore.startsWith("### ")) {
         ta.value = before.substring(0, lineStart) + lineBefore.substring(4) + (sel || "") + after;
         ta.selectionStart = ta.selectionEnd = start - 4 + (sel ? sel.length : 0);
-        onBodyInput();
-        return;
+        onBodyInput(); return;
       } else if (lineBefore.startsWith("## ")) {
         ta.value = before.substring(0, lineStart) + "### " + lineBefore.substring(3) + (sel || "") + after;
         ta.selectionStart = ta.selectionEnd = start + 1 + (sel ? sel.length : 0);
-        onBodyInput();
-        return;
+        onBodyInput(); return;
       }
       insert = `## ${sel || "Heading"}`;
       const prefix = before.length > 0 && !before.endsWith("\n") ? "\n" : "";
       ta.value = before + prefix + insert + after;
       const base = before.length + prefix.length;
-      ta.selectionStart = base + 3;
-      ta.selectionEnd = base + insert.length;
-      onBodyInput();
-      return;
+      ta.selectionStart = base + 3; ta.selectionEnd = base + insert.length;
+      onBodyInput(); return;
     }
     case "quote": {
       const lines = (sel || "Quote").split("\n").map((l) => "> " + l).join("\n");
-      insert = lines;
-      sS = start;
-      sE = start + insert.length;
-      break;
+      insert = lines; sS = start; sE = start + insert.length; break;
     }
     case "code":
       insert = sel ? `\`${sel}\`` : "``";
-      sS = start + 1;
-      sE = start + 1 + (sel ? sel.length : 0);
-      break;
+      sS = start + 1; sE = start + 1 + (sel ? sel.length : 0); break;
     case "codeblock": {
       const block = sel || "";
       insert = "\n```\n" + block + "\n```\n";
-      sS = start + 5;
-      sE = start + 5 + block.length;
-      break;
+      sS = start + 5; sE = start + 5 + block.length; break;
     }
     case "link":
       if (sel) {
-        insert = `[${sel}](url)`;
-        sS = start + sel.length + 3;
-        sE = start + sel.length + 6;
+        insert = `[${sel}](url)`; sS = start + sel.length + 3; sE = start + sel.length + 6;
       } else {
-        insert = "[](url)";
-        sS = start + 1;
-        sE = start + 1;
-      }
-      break;
+        insert = "[](url)"; sS = start + 1; sE = start + 1;
+      } break;
     case "image":
-      $("#compose-file-input").click();
-      return;
+      $("#compose-file-input").click(); return;
     case "ul": {
       const items = (sel || "Item").split("\n").map((l) => "- " + l).join("\n");
-      insert = items;
-      sS = start;
-      sE = start + insert.length;
-      break;
+      insert = items; sS = start; sE = start + insert.length; break;
     }
     case "ol": {
       const items = (sel || "Item").split("\n").map((l, i) => `${i + 1}. ${l}`).join("\n");
-      insert = items;
-      sS = start;
-      sE = start + insert.length;
-      break;
+      insert = items; sS = start; sE = start + insert.length; break;
     }
     case "hr":
-      insert = "\n---\n";
-      sS = sE = start + insert.length;
-      break;
-    default:
-      return;
+      insert = "\n---\n"; sS = sE = start + insert.length; break;
+    default: return;
   }
 
   ta.value = before + insert + after;
-  ta.selectionStart = sS;
-  ta.selectionEnd = sE;
+  ta.selectionStart = sS; ta.selectionEnd = sE;
   onBodyInput();
 }
 
 /* ================================================================
-   Image insertion
+   Image insertion — store data, insert clean token
    ================================================================ */
 
 async function handleImageFiles(files) {
   const ta = $("#compose-body");
   if (!ta || !files.length) return;
 
-  if (!canAddImages(files.length)) {
-    const remaining = MAX_IMAGES - countImages();
-    if (remaining <= 0) {
-      toast(`Maximum ${MAX_IMAGES} images per post`, "err");
-      return;
-    }
-    toast(`Only ${remaining} image slot${remaining > 1 ? "s" : ""} remaining`, "err");
-    files = Array.from(files).slice(0, remaining);
+  if (_replacingCover) {
+    _replacingCover = false;
+    try {
+      const file = files[0];
+      const altText = file.name.replace(/\.[^.]+$/, "").replace(/[_-]+/g, " ");
+      const { dataUri } = await processImage(file);
+      setCoverDirect(dataUri, altText);
+      toast("Cover image replaced");
+    } catch (err) { toast(err.message || "Image processing failed", "err"); }
+    return;
   }
 
-  for (const file of files) {
-    const cursor = ta.selectionStart;
+  const needsCover = !_coverImageId;
+  const fileArr = Array.from(files);
+
+  if (needsCover && fileArr.length === 1) {
+    try {
+      const file = fileArr[0];
+      const altText = file.name.replace(/\.[^.]+$/, "").replace(/[_-]+/g, " ");
+      const { dataUri } = await processImage(file);
+      setCoverDirect(dataUri, altText);
+      toast("Image set as cover");
+      return;
+    } catch (err) {
+      toast(err.message || "Image processing failed", "err");
+      return;
+    }
+  }
+
+  let coverHandled = false;
+  const inlineFiles = [];
+  for (const f of fileArr) {
+    if (needsCover && !coverHandled) { coverHandled = true; inlineFiles.push({ file: f, asCover: true }); }
+    else inlineFiles.push({ file: f, asCover: false });
+  }
+
+  const inlineOnly = inlineFiles.filter((f) => !f.asCover);
+  if (inlineOnly.length && !canAddInlineImages(inlineOnly.length)) {
+    const remaining = MAX_INLINE_IMAGES - countInlineImages();
+    if (remaining <= 0 && !needsCover) { toast(`Maximum ${MAX_INLINE_IMAGES} inline images per post`, "err"); return; }
+    if (remaining < inlineOnly.length) toast(`Only ${remaining} inline slot${remaining > 1 ? "s" : ""} remaining`, "err");
+  }
+
+  for (const { file, asCover } of inlineFiles) {
+    const altText = file.name.replace(/\.[^.]+$/, "").replace(/[_-]+/g, " ");
+
+    if (asCover) {
+      try {
+        const { dataUri } = await processImage(file);
+        setCoverDirect(dataUri, altText);
+      } catch (err) { toast(err.message || "Image processing failed", "err"); }
+      continue;
+    }
+
+    if (!canAddInlineImages(1)) continue;
+
     const placeholder = `![Uploading ${esc(file.name)}...]()`;
     insertTextAtCursor(ta, placeholder);
     onBodyInput();
 
     try {
       const { dataUri } = await processImage(file);
-      const altText = file.name.replace(/\.[^.]+$/, "").replace(/[_-]+/g, " ");
-      const md = `![${altText}](${dataUri})`;
+      const id = storeImage(dataUri);
+      const token = `![${altText}](img:${id})`;
       const pos = ta.value.indexOf(placeholder);
       if (pos !== -1) {
-        ta.value = ta.value.substring(0, pos) + md + ta.value.substring(pos + placeholder.length);
-        ta.selectionStart = ta.selectionEnd = pos + md.length;
+        ta.value = ta.value.substring(0, pos) + token + ta.value.substring(pos + placeholder.length);
+        ta.selectionStart = ta.selectionEnd = pos + token.length;
       }
       onBodyInput();
     } catch (err) {
@@ -729,13 +843,14 @@ function insertTextAtCursor(ta, text) {
 }
 
 /* ================================================================
-   Input handler (shared for preview, stats, autosave, autogrow)
+   Input handler
    ================================================================ */
 
 function onBodyInput() {
   clearTimeout(_previewTimer);
   _previewTimer = setTimeout(() => {
-    if (_currentMode === "split" || _currentMode === "preview") updatePreview();
+    if (_currentMode === "preview") updatePreview();
+    else updateImageManager();
   }, 150);
   updateStats();
   autoGrow();
@@ -749,17 +864,12 @@ function onBodyInput() {
 
 function handleKeydown(e) {
   if (e.key === "Escape") {
-    if (_focusMode) {
-      toggleFocusMode();
-      e.preventDefault();
-    } else {
-      showConfirm({
-        title: "Close editor?",
-        message: "Any unsaved changes will be lost.",
-        okLabel: "Discard & close",
-        cancelLabel: "Keep editing",
-      }).then((yes) => { if (yes) { closeComposeModal(); go("feed"); } });
-    }
+    showConfirm({
+      title: "Close editor?",
+      message: "Any unsaved changes will be lost.",
+      okLabel: "Discard & close",
+      cancelLabel: "Keep editing",
+    }).then((yes) => { if (yes) go("feed"); });
     return;
   }
 
@@ -780,6 +890,7 @@ function handleKeydown(e) {
     return;
   }
 
+  if (key === "p") { e.preventDefault(); togglePreview(); return; }
   const cmds = { b: "bold", i: "italic", e: "code", k: "link" };
   if (cmds[key]) { e.preventDefault(); execCommand(cmds[key]); return; }
   if (key === "s") { e.preventDefault(); submitPost("draft"); return; }
@@ -793,80 +904,89 @@ function handleKeydown(e) {
 export function bindComposeEvents() {
   const body = $("#compose-body");
   const toolbar = $("#compose-toolbar");
-  const modes = $("#compose-modes");
-  const focusBtn = $("#compose-focus");
   const fileInput = $("#compose-file-input");
-  const modalClose = $("#compose-modal-close");
-  const modalBackdrop = $("#compose-modal-backdrop");
+  const closeBtn = $("#compose-close");
+  const previewBtn = $("#compose-preview-toggle");
 
   $("#btn-publish").addEventListener("click", () => submitPost("published"));
   $("#btn-draft").addEventListener("click", () => submitPost("draft"));
 
-  // Close modal button
-  if (modalClose) {
-    modalClose.addEventListener("click", () => {
+  if (closeBtn) {
+    closeBtn.addEventListener("click", () => {
       showConfirm({
         title: "Close editor?",
         message: "Any unsaved changes will be lost.",
         okLabel: "Discard & close",
         cancelLabel: "Keep editing",
-      }).then((yes) => { if (yes) { closeComposeModal(); go("feed"); } });
+      }).then((yes) => { if (yes) go("feed"); });
     });
   }
 
-  // Close on backdrop click
-  if (modalBackdrop) {
-    modalBackdrop.addEventListener("click", () => {
-      showConfirm({
-        title: "Close editor?",
-        message: "Any unsaved changes will be lost.",
-        okLabel: "Discard & close",
-        cancelLabel: "Keep editing",
-      }).then((yes) => { if (yes) { closeComposeModal(); go("feed"); } });
+  if (previewBtn) {
+    previewBtn.addEventListener("click", () => togglePreview());
+  }
+
+  // Author alias: click pencil to focus the input
+  const authorEdit = $("#compose-author-edit");
+  if (authorEdit) {
+    authorEdit.addEventListener("click", () => {
+      const input = $("#compose-author");
+      if (input) { input.focus(); input.select(); }
     });
   }
 
   body.addEventListener("input", onBodyInput);
   body.addEventListener("keydown", handleKeydown);
 
-  // Toolbar button clicks
   toolbar.addEventListener("click", (e) => {
     const btn = e.target.closest("[data-cmd]");
     if (btn) execCommand(btn.dataset.cmd);
   });
 
-  // Mode switching
-  modes.addEventListener("click", (e) => {
-    const btn = e.target.closest("[data-mode]");
-    if (btn) setMode(btn.dataset.mode);
-  });
-
-  // Focus mode
-  focusBtn.addEventListener("click", toggleFocusMode);
-
-  // File input for images
   fileInput.addEventListener("change", () => {
     if (fileInput.files.length) handleImageFiles([...fileInput.files]);
     fileInput.value = "";
   });
 
-  // Drag and drop images
-  const writePaneEl = $("#compose-write-pane");
+  const tagPicker = $("#compose-tagpicker");
+  if (tagPicker) {
+    tagPicker.addEventListener("click", (e) => {
+      const pill = e.target.closest(".ev-tag");
+      if (pill) toggleTag(pill.dataset.tag);
+    });
+  }
+
+  const tagInput = $("#compose-tag-input");
+  if (tagInput) {
+    tagInput.addEventListener("keydown", (e) => {
+      if (e.key === "Enter" || e.key === ",") {
+        e.preventDefault();
+        addCustomTag(tagInput.value);
+        tagInput.value = "";
+      }
+      if (e.key === "Backspace" && !tagInput.value && _selectedTags.size) {
+        const last = [..._selectedTags].pop();
+        _selectedTags.delete(last);
+        renderTagPills();
+        scheduleAutoSave();
+      }
+    });
+    tagInput.addEventListener("blur", () => {
+      if (tagInput.value.trim()) {
+        addCustomTag(tagInput.value);
+        tagInput.value = "";
+      }
+    });
+  }
+
+  const writePane = $("#compose-write-pane");
   const dropzone = $("#compose-dropzone");
   let dragCounter = 0;
 
-  writePaneEl.addEventListener("dragenter", (e) => {
-    e.preventDefault();
-    dragCounter++;
-    dropzone.classList.add("active");
-  });
-  writePaneEl.addEventListener("dragleave", (e) => {
-    e.preventDefault();
-    dragCounter--;
-    if (dragCounter <= 0) { dragCounter = 0; dropzone.classList.remove("active"); }
-  });
-  writePaneEl.addEventListener("dragover", (e) => { e.preventDefault(); });
-  writePaneEl.addEventListener("drop", (e) => {
+  writePane.addEventListener("dragenter", (e) => { e.preventDefault(); dragCounter++; dropzone.classList.add("active"); });
+  writePane.addEventListener("dragleave", (e) => { e.preventDefault(); dragCounter--; if (dragCounter <= 0) { dragCounter = 0; dropzone.classList.remove("active"); } });
+  writePane.addEventListener("dragover", (e) => { e.preventDefault(); });
+  writePane.addEventListener("drop", (e) => {
     e.preventDefault();
     dragCounter = 0;
     dropzone.classList.remove("active");
@@ -874,66 +994,11 @@ export function bindComposeEvents() {
     if (files.length) handleImageFiles(files);
   });
 
-  // Paste images
   body.addEventListener("paste", (e) => {
     const files = extractImageFiles(e);
-    if (files.length) {
-      e.preventDefault();
-      handleImageFiles(files);
-    }
+    if (files.length) { e.preventDefault(); handleImageFiles(files); }
   });
 
-  // Auto-save on title/meta changes too
-  $("#compose-post-title").addEventListener("input", () => {
-    scheduleAutoSave();
-    setSaveStatus("Unsaved changes");
-  });
+  $("#compose-post-title").addEventListener("input", () => { scheduleAutoSave(); setSaveStatus("Unsaved changes"); });
   $("#compose-author").addEventListener("input", scheduleAutoSave);
-  $("#compose-tags").addEventListener("input", scheduleAutoSave);
-
-  // Cover image picker
-  const coverArea = $("#compose-cover");
-  const coverEmpty = $("#compose-cover-empty");
-  const coverInput = $("#compose-cover-input");
-  const coverChangeBtn = $("#compose-cover-change");
-  const coverRemoveBtn = $("#compose-cover-remove");
-
-  if (coverEmpty) {
-    coverEmpty.addEventListener("click", () => coverInput.click());
-  }
-  if (coverChangeBtn) {
-    coverChangeBtn.addEventListener("click", (e) => { e.stopPropagation(); coverInput.click(); });
-  }
-  if (coverRemoveBtn) {
-    coverRemoveBtn.addEventListener("click", (e) => { e.stopPropagation(); removeCoverImage(); });
-  }
-  if (coverInput) {
-    coverInput.addEventListener("change", () => {
-      if (coverInput.files.length) setCoverImage(coverInput.files[0]);
-      coverInput.value = "";
-    });
-  }
-
-  // Cover area drag-and-drop
-  if (coverArea) {
-    let coverDrag = 0;
-    coverArea.addEventListener("dragenter", (e) => {
-      e.preventDefault();
-      coverDrag++;
-      coverArea.classList.add("drag-over");
-    });
-    coverArea.addEventListener("dragleave", (e) => {
-      e.preventDefault();
-      coverDrag--;
-      if (coverDrag <= 0) { coverDrag = 0; coverArea.classList.remove("drag-over"); }
-    });
-    coverArea.addEventListener("dragover", (e) => e.preventDefault());
-    coverArea.addEventListener("drop", (e) => {
-      e.preventDefault();
-      coverDrag = 0;
-      coverArea.classList.remove("drag-over");
-      const files = extractImageFiles(e);
-      if (files.length) setCoverImage(files[0]);
-    });
-  }
 }

@@ -269,11 +269,13 @@ function initLightbox() {
  * Open lightbox with specific image
  */
 function openLightbox(img) {
-  const proseEl = img.closest(".prose");
-  if (!proseEl) return;
+  initLightbox();
+  const container = img.closest(".photo-showcase") || img.closest(".prose");
+  if (!container) return;
 
-  _currentImages = [...proseEl.querySelectorAll("img, .gallery-img")];
+  _currentImages = [...container.querySelectorAll("img:not(.ps-thumb img), .gallery-img, .ps-img")];
   _currentIndex = _currentImages.indexOf(img);
+  if (_currentIndex < 0) _currentIndex = 0;
 
   showLightboxImage();
   _lightbox.classList.add("active");
@@ -332,17 +334,113 @@ export function markStandaloneImagesZoomable(proseEl) {
   });
 }
 
+/**
+ * Photo Showcase — elegant end-of-article slideshow with captions.
+ * Collects all images from the article (cover banner + prose) and builds
+ * a large, horizontally-scrolling gallery with captions and lightbox hooks.
+ */
+export function injectPhotoShowcase(articleEl) {
+  const coverImg = articleEl.querySelector(".article-cover img");
+  const proseImgs = [...articleEl.querySelectorAll(".prose img")];
+  const allImages = [];
+
+  if (coverImg) allImages.push({ src: coverImg.src, alt: coverImg.alt || "" });
+  proseImgs.forEach((img) => {
+    if (img.src && !allImages.some((i) => i.src === img.src)) {
+      allImages.push({ src: img.src, alt: img.alt || "" });
+    }
+  });
+
+  if (allImages.length < 2) return;
+
+  const section = document.createElement("section");
+  section.className = "photo-showcase";
+  section.setAttribute("aria-label", "Photo gallery");
+
+  const header = `<div class="ps-header"><h3>Photo Gallery</h3><span class="ps-count">${allImages.length} photos</span></div>`;
+
+  const slides = allImages.map((img, idx) =>
+    `<div class="ps-slide${idx === 0 ? " active" : ""}" data-index="${idx}">` +
+      `<img class="ps-img" src="${escapeHtml(img.src)}" alt="${escapeHtml(img.alt)}" loading="lazy" />` +
+      (img.alt ? `<figcaption class="ps-caption">${escapeHtml(img.alt)}</figcaption>` : "") +
+    `</div>`
+  ).join("");
+
+  const dots = allImages.map((_, idx) =>
+    `<button class="ps-dot${idx === 0 ? " active" : ""}" data-index="${idx}" aria-label="View photo ${idx + 1}"></button>`
+  ).join("");
+
+  section.innerHTML =
+    header +
+    `<div class="ps-carousel">` +
+      `<div class="ps-track">${slides}</div>` +
+      `<button class="ps-nav ps-nav-prev" aria-label="Previous"><svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M15 18l-6-6 6-6"/></svg></button>` +
+      `<button class="ps-nav ps-nav-next" aria-label="Next"><svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M9 18l6-6-6-6"/></svg></button>` +
+      `<div class="ps-counter">1 / ${allImages.length}</div>` +
+    `</div>` +
+    `<div class="ps-dots">${dots}</div>` +
+    `<div class="ps-thumbnails">${allImages.map((img, idx) =>
+      `<button class="ps-thumb${idx === 0 ? " active" : ""}" data-index="${idx}"><img src="${escapeHtml(img.src)}" alt="" loading="lazy" /></button>`
+    ).join("")}</div>`;
+
+  const prose = articleEl.querySelector(".prose");
+  if (prose) prose.after(section);
+  else articleEl.appendChild(section);
+
+  bindShowcaseEvents(section, allImages);
+}
+
+function bindShowcaseEvents(section, images) {
+  let current = 0;
+
+  function goTo(idx) {
+    if (idx < 0) idx = images.length - 1;
+    if (idx >= images.length) idx = 0;
+    current = idx;
+
+    section.querySelectorAll(".ps-slide").forEach((s, i) => s.classList.toggle("active", i === idx));
+    section.querySelectorAll(".ps-dot").forEach((d, i) => d.classList.toggle("active", i === idx));
+    section.querySelectorAll(".ps-thumb").forEach((t, i) => t.classList.toggle("active", i === idx));
+    const counter = section.querySelector(".ps-counter");
+    if (counter) counter.textContent = `${idx + 1} / ${images.length}`;
+
+    const activeThumb = section.querySelector(".ps-thumb.active");
+    if (activeThumb) activeThumb.scrollIntoView({ behavior: "smooth", inline: "center", block: "nearest" });
+  }
+
+  section.querySelector(".ps-nav-prev")?.addEventListener("click", () => goTo(current - 1));
+  section.querySelector(".ps-nav-next")?.addEventListener("click", () => goTo(current + 1));
+
+  section.querySelectorAll(".ps-dot").forEach((dot) => {
+    dot.addEventListener("click", () => goTo(parseInt(dot.dataset.index)));
+  });
+
+  section.querySelectorAll(".ps-thumb").forEach((thumb) => {
+    thumb.addEventListener("click", () => goTo(parseInt(thumb.dataset.index)));
+  });
+
+  section.querySelectorAll(".ps-img").forEach((img) => {
+    img.addEventListener("click", () => openLightbox(img));
+  });
+
+  let touchStartX = 0;
+  const carousel = section.querySelector(".ps-carousel");
+  if (carousel) {
+    carousel.addEventListener("touchstart", (e) => { touchStartX = e.touches[0].clientX; }, { passive: true });
+    carousel.addEventListener("touchend", (e) => {
+      const dx = e.changedTouches[0].clientX - touchStartX;
+      if (Math.abs(dx) > 50) goTo(current + (dx < 0 ? 1 : -1));
+    });
+  }
+
+  section.addEventListener("keydown", (e) => {
+    if (e.key === "ArrowLeft") { goTo(current - 1); e.preventDefault(); }
+    if (e.key === "ArrowRight") { goTo(current + 1); e.preventDefault(); }
+  });
+}
+
 function escapeHtml(text) {
   const div = document.createElement("div");
   div.textContent = text;
   return div.innerHTML;
-}
-
-/**
- * Compose: Drag-and-drop reordering for images in markdown
- */
-export function enableImageReordering(textareaEl) {
-  // This will be handled via a UI overlay in the compose view
-  // For now, users can manually cut/paste markdown image syntax
-  console.log("Image reordering enabled for textarea", textareaEl);
 }

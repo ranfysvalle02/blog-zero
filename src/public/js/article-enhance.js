@@ -1,5 +1,5 @@
 import { shareUrl, esc, safeAttr } from "./utils.js";
-import { enhanceImagesWithGallery, markStandaloneImagesZoomable } from "./image-gallery.js";
+import { enhanceImagesWithGallery, markStandaloneImagesZoomable, injectPhotoShowcase } from "./image-gallery.js";
 
 let _progressBar = null;
 let _scrollHandler = null;
@@ -8,7 +8,8 @@ let _selMousedownBound = false;
 let _observers = [];
 
 export function enhanceArticle(postId) {
-  const prose = document.querySelector("#article-content .prose");
+  const article = document.querySelector("#article-content");
+  const prose = article?.querySelector(".prose");
   if (!prose) return;
 
   initProgressBar(prose);
@@ -19,6 +20,7 @@ export function enhanceArticle(postId) {
   initScrollReveal(prose);
   enhanceImagesWithGallery(prose);
   markStandaloneImagesZoomable(prose);
+  injectPhotoShowcase(article);
   initSelectionShare(prose, postId);
 }
 
