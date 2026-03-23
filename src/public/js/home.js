@@ -1,5 +1,4 @@
-import { $, BLOG_CONFIG, UI_CONFIG, esc, safeAttr, fmtDate, readTime, excerpt, api, go, renderSkeleton, renderError, extractCover, stripCover, applyBgImages } from "./utils.js";
-import { renderCard } from "./feed.js";
+import { $, UI_CONFIG, esc, safeAttr, fmtDate, readTime, excerpt, api, go, renderSkeleton, renderError, extractCover, stripCover, applyBgImages } from "./utils.js";
 import { initHero } from "./hero.js";
 
 let heroInitialized = false;
@@ -57,11 +56,10 @@ export async function loadHome() {
     heroInitialized = true;
   }
 
-  const cfg = BLOG_CONFIG.landing;
   const container = $("#home-recent");
   container.innerHTML = renderSkeleton(3);
 
-  const r = await api("listPosts", { params: { limit: String(Math.max(cfg.recentCount || 6, 7)) } });
+  const r = await api("listPosts", { params: { limit: "200" } });
 
   if (r.networkError) {
     container.innerHTML = renderError("Could not reach the server. Is the API running?", loadHome);
@@ -76,7 +74,7 @@ export async function loadHome() {
 
   const headline = posts[0];
   const secondaries = posts.slice(1, 3);
-  const compacts = posts.slice(3, 7);
+  const compacts = posts.slice(3);
 
   let html = "";
 
