@@ -1,4 +1,4 @@
-import { $, UI_CONFIG, state, esc, md, toast, api, hasRole, go, readTime, showConfirm, excerpt as makeExcerpt, extractCover } from "./utils.js";
+import { $, UI_CONFIG, state, esc, md, toast, api, hasRole, go, readTime, showConfirm } from "./utils.js";
 import { processCoverImage, extractImageFiles } from "./image-util.js";
 
 const AUTOSAVE_KEY = "blog-zero-draft";
@@ -298,12 +298,6 @@ async function submitPost(status) {
   if (author) payload.author = author;
   if (body) payload.body = body;
   if (tags.length) payload.tags = tags;
-
-  const autoExcerpt = makeExcerpt(body, 160);
-  if (autoExcerpt) payload.excerpt = autoExcerpt;
-
-  const cover = extractCover(body);
-  if (cover?.src && !cover.src.startsWith("data:")) payload.cover_image = cover.src;
 
   const payloadSize = new Blob([JSON.stringify(payload)]).size;
   if (payloadSize > MAX_PAYLOAD_BYTES) {

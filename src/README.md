@@ -199,7 +199,7 @@ ADMIN_EMAIL=me@corp.com ADMIN_PASSWORD=supersecret docker compose up
 ## Run locally
 
 ```bash
-pip install "mdb-engine>=0.11.0" uvicorn httpx jinja2
+pip install "mdb-engine>=0.11.2" uvicorn httpx jinja2
 ADMIN_EMAIL=admin@example.com ADMIN_PASSWORD=admin123 mdb-engine serve manifest.json --reload
 ```
 

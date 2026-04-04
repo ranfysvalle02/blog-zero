@@ -56,7 +56,7 @@ SSR preview at **http://localhost:8000/s** — crawlable, SEO-ready pages.
 ## Architecture
 
 Everything is defined in [`src/manifest.json`](src/manifest.json). The engine
-([mdb-engine >=0.11.0](https://pypi.org/project/mdb-engine/)) reads it and generates:
+([mdb-engine >=0.11.2](https://pypi.org/project/mdb-engine/)) reads it and generates:
 
 - REST API with auth, CRUD, scopes, and hooks
 - MongoDB storage with validation, managed indexes, and referential integrity
@@ -159,7 +159,7 @@ at the `src/` directory and set these env vars:
 ### Run Locally (no Docker)
 
 ```bash
-pip install "mdb-engine>=0.11.0" uvicorn httpx jinja2
+pip install "mdb-engine>=0.11.2" uvicorn httpx jinja2
 ADMIN_EMAIL=admin@example.com ADMIN_PASSWORD=admin123 \
   mdb-engine serve manifest.json --reload
 ```

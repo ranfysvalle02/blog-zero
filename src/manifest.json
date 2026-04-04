@@ -34,7 +34,7 @@
       "owner_field": "author_id",
       "immutable_fields": ["author_id"],
       "writable_fields": {
-        "editor": ["title", "body", "author", "status", "tags", "excerpt", "cover_image"],
+        "editor": ["title", "body", "author", "status", "tags"],
         "moderator": ["status", "tags"]
       },
       "schema": {
@@ -45,8 +45,9 @@
           "author":        { "type": "string" },
           "status":        { "type": "string", "enum": ["draft", "published", "archived"] },
           "tags":          { "type": "array", "items": { "type": "string", "x-values-from": { "collection": "tags", "field": "name" } } },
-          "excerpt":       { "type": "string" },
-          "cover_image":   { "type": "string" },
+          "excerpt":       { "type": "string", "x-computed": { "from": "body", "transform": "plain_text", "max_length": 160 } },
+          "cover_image":   { "type": "string", "x-computed": { "from": "body", "transform": "first_image" } },
+          "reading_time":  { "type": "integer", "x-computed": { "from": "body", "transform": "word_count", "divide_by": 200 } },
           "comment_count": { "type": "integer" }
         },
         "required": ["title"]
@@ -294,9 +295,9 @@
         },
         "seo": {
           "title": "{{post.title}} — blog-zero",
-          "description": "{{post.excerpt}}",
+          "description": { "fallback": ["{{post.excerpt}}", "{{post.body | plain_text | truncate(160)}}", "{{site_description}}"] },
           "og_type": "article",
-          "og_image": "{{post.cover_image}}",
+          "og_image": { "fallback": ["{{post.cover_image}}", "/og/posts/{{post._id}}.png"] },
           "json_ld": {
             "@context": "https://schema.org",
             "@type": "BlogPosting",
