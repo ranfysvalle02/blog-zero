@@ -34,7 +34,7 @@
       "owner_field": "author_id",
       "immutable_fields": ["author_id"],
       "writable_fields": {
-        "editor": ["title", "body", "author", "status", "tags"],
+        "editor": ["title", "body", "author", "status", "tags", "excerpt", "cover_image"],
         "moderator": ["status", "tags"]
       },
       "schema": {
@@ -45,6 +45,8 @@
           "author":        { "type": "string" },
           "status":        { "type": "string", "enum": ["draft", "published", "archived"] },
           "tags":          { "type": "array", "items": { "type": "string", "x-values-from": { "collection": "tags", "field": "name" } } },
+          "excerpt":       { "type": "string" },
+          "cover_image":   { "type": "string" },
           "comment_count": { "type": "integer" }
         },
         "required": ["title"]

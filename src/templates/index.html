@@ -3,11 +3,13 @@
 {% block title %}{{ seo.title }}{% endblock %}
 
 {% block seo_meta %}
+  <link rel="canonical" href="{{ request.url }}">
   <meta name="description" content="{{ seo.description }}">
   <meta property="og:title" content="{{ seo.title }}">
   <meta property="og:description" content="{{ seo.description }}">
   <meta property="og:type" content="{{ seo.og_type or 'website' }}">
   <meta property="og:site_name" content="{{ seo.site_name }}">
+  <meta property="og:url" content="{{ request.url }}">
   {% if seo.og_image %}<meta property="og:image" content="{{ seo.og_image }}">{% endif %}
   <meta name="twitter:card" content="{{ 'summary_large_image' if seo.og_image else 'summary' }}">
   <meta name="twitter:title" content="{{ seo.title }}">
