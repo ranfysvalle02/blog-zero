@@ -42,6 +42,7 @@ export function updateSeo(view, data) {
     title = `${data.title} — ${siteName}`;
     description = excerpt(data.body, 160) || defaultDesc;
     type = "article";
+    url = `${location.origin}/s/posts/${encodeURIComponent(data._id)}`;
     setJsonLd({
       "@context": "https://schema.org",
       "@type": "BlogPosting",

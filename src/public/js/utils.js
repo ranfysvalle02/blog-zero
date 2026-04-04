@@ -122,7 +122,7 @@ export function readTime(body) {
 }
 
 export function shareUrl(postId) {
-  return `${location.origin}/#article/${encodeURIComponent(postId)}`;
+  return `${location.origin}/s/posts/${encodeURIComponent(postId)}`;
 }
 
 export function renderShareBar(postId, title) {
