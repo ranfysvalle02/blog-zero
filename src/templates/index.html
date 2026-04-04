@@ -1,5 +1,23 @@
 {% extends "mdb_base.html" %}
 
+{% block title %}{{ seo.title }}{% endblock %}
+
+{% block seo_meta %}
+  <meta name="description" content="{{ seo.description }}">
+  <meta property="og:title" content="{{ seo.title }}">
+  <meta property="og:description" content="{{ seo.description }}">
+  <meta property="og:type" content="{{ seo.og_type or 'website' }}">
+  <meta property="og:site_name" content="{{ seo.site_name }}">
+  {% if seo.og_image %}<meta property="og:image" content="{{ seo.og_image }}">{% endif %}
+  <meta name="twitter:card" content="{{ 'summary_large_image' if seo.og_image else 'summary' }}">
+  <meta name="twitter:title" content="{{ seo.title }}">
+  <meta name="twitter:description" content="{{ seo.description }}">
+  {% if seo.og_image %}<meta name="twitter:image" content="{{ seo.og_image }}">{% endif %}
+  {% if seo.json_ld %}
+  <script type="application/ld+json">{{ seo.json_ld | safe }}</script>
+  {% endif %}
+{% endblock %}
+
 {% block head %}
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
