@@ -252,7 +252,7 @@
     "enabled": true,
     "site_name": "blog-zero",
     "site_description": "A full-featured blog built from a single JSON manifest.",
-    "base_url": "",
+    "base_url": "https://blog.oblivio-company.com",
     "sitemap": true,
     "routes": {
       "/s": {
