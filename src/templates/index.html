@@ -1,20 +1,14 @@
-<!DOCTYPE html>
-<html lang="en">
-<head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>{{ seo.title }}</title>
-  <meta name="description" content="{{ seo.description }}">
-  <meta property="og:title" content="{{ seo.title }}">
-  <meta property="og:description" content="{{ seo.description }}">
-  <meta property="og:type" content="website">
+{% extends "mdb_base.html" %}
+
+{% block head %}
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Inter:opsz,wght@14..32,400..800&display=swap" rel="stylesheet">
   <link rel="icon" href="/public/favicon.svg" type="image/svg+xml">
   <link rel="stylesheet" href="/public/style.css">
-</head>
-<body>
+{% endblock %}
+
+{% block content %}
   <nav class="top" role="navigation" aria-label="Main navigation">
     <div class="nav-inner">
       <a class="brand" href="/s">
@@ -96,5 +90,4 @@
       <a href="https://pypi.org/project/mdb-engine/" target="_blank" rel="noopener noreferrer">PyPI</a>
     </nav>
   </footer>
-</body>
-</html>
+{% endblock %}
