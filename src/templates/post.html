@@ -22,7 +22,19 @@
         <a href="/s" role="tab">Home</a>
         <a href="/public/about.html" role="tab">About</a>
       </div>
-      <div class="nav-right"></div>
+      <div class="nav-right">
+        <button class="theme-toggle desktop-only" aria-label="Toggle dark mode" role="switch" aria-checked="true">
+          <span class="toggle-track">
+            <span class="toggle-icon">&#9790;</span>
+            <span class="toggle-icon">&#9788;</span>
+            <span class="toggle-thumb"></span>
+          </span>
+        </button>
+        <a href="/#home" class="btn btn-outline btn-sm">Open App</a>
+        <button class="hamburger" id="hamburger" aria-label="Menu" aria-expanded="false">
+          <span></span><span></span><span></span>
+        </button>
+      </div>
     </div>
   </nav>
 
@@ -30,6 +42,11 @@
     {% if post %}
     <article class="article">
       <a href="/s" class="back">&larr; Back to posts</a>
+      {% if post.cover_image %}
+      <figure class="article-cover">
+        <img src="{{ post.cover_image }}" alt="{{ post.title }}" width="820" height="461">
+      </figure>
+      {% endif %}
       <header>
         <h1>{{ post.title }}</h1>
         <div class="meta">
@@ -100,4 +117,5 @@
       <a href="https://pypi.org/project/mdb-engine/" target="_blank" rel="noopener noreferrer">PyPI</a>
     </nav>
   </footer>
+  <script src="/public/js/page-shell.js"></script>
 {% endblock %}
