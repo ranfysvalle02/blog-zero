@@ -2,7 +2,7 @@ FROM python:3.11-slim
 
 WORKDIR /app
 
-RUN pip install --no-cache-dir "mdb-engine>=0.11.2" uvicorn httpx jinja2
+RUN pip install --no-cache-dir "mdb-engine>=0.11.5" uvicorn httpx jinja2
 
 COPY manifest.json .
 COPY public/ public/
