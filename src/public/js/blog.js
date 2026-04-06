@@ -73,10 +73,13 @@ function renderPosts() {
   container.innerHTML =
     `<div class="feed">${page.map((p) => renderCard(p)).join("")}</div>` +
     `<div class="feed-pagination">` +
-      `<div class="feed-pag-bar"><div class="feed-pag-fill" style="width:${pct}%"></div></div>` +
+      `<div class="feed-pag-bar"><div class="feed-pag-fill" id="feed-pag-fill"></div></div>` +
       `<p class="post-count">${page.length} of ${filtered.length} post${filtered.length === 1 ? "" : "s"}</p>` +
       (hasMore ? `<button class="btn btn-outline" id="load-more-btn">Show ${Math.min(remaining, PAGE_SIZE)} more</button>` : "") +
     `</div>`;
+
+  const fill = container.querySelector("#feed-pag-fill");
+  if (fill) fill.style.width = `${pct}%`;
 
   applyBgImages(container);
 }

@@ -32,12 +32,19 @@ export function updateSeo(view, data) {
   let description = defaultDesc;
   let type = "website";
   let url = location.href;
+  let image = defaultImg;
 
   if (view === "home") {
     title = siteName;
   } else if (view === "blog") {
     title = `Browse posts — ${siteName}`;
     description = `Browse and search all posts on ${siteName}.`;
+  } else if (view === "article" && data) {
+    title = `${data.title || "Post"} — ${siteName}`;
+    description = data.excerpt || defaultDesc;
+    type = "article";
+    url = `${location.origin}/posts/${encodeURIComponent(data._id || "")}`;
+    if (data.cover_image && !data.cover_image.startsWith("data:")) image = data.cover_image;
   }
 
   document.title = title;
@@ -46,14 +53,29 @@ export function updateSeo(view, data) {
   setMeta("og:description", description);
   setMeta("og:type", type);
   setMeta("og:url", url);
-  if (defaultImg) setMeta("og:image", defaultImg);
+  if (image && !image.startsWith("data:")) {
+    setMeta("og:image", image);
+    setMeta("twitter:image", image);
+  }
   setMeta("og:site_name", siteName);
 
-  setJsonLd({
-    "@context": "https://schema.org",
-    "@type": "Blog",
-    "name": siteName,
-    "description": defaultDesc,
-    "url": location.origin,
-  });
+  if (view === "article" && data) {
+    setJsonLd({
+      "@context": "https://schema.org",
+      "@type": "BlogPosting",
+      "headline": data.title || "",
+      "datePublished": data.created_at || "",
+      "author": { "@type": "Person", "name": data.author || "Anonymous" },
+      "publisher": { "@type": "Organization", "name": siteName },
+      "url": url,
+    });
+  } else {
+    setJsonLd({
+      "@context": "https://schema.org",
+      "@type": "Blog",
+      "name": siteName,
+      "description": defaultDesc,
+      "url": location.origin,
+    });
+  }
 }

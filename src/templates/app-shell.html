@@ -1,0 +1,257 @@
+{% extends "mdb_base.html" %}
+
+{% block title %}{{ seo.title }}{% endblock %}
+
+{% block seo_meta %}
+  {{ super() }}
+{% endblock %}
+
+{% block head %}
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' https://cdn.jsdelivr.net 'sha256-9Qa6J7TaZvhLK9RCAyMWk0sTYdtT1U9fOjKXSisTySQ='; style-src 'self' 'unsafe-hashes' 'sha256-t6oewASd7J1vBg5mQtX4hl8bg8FeegYFM3scKLIhYUc='; img-src 'self' https://images.unsplash.com data:; connect-src 'self' https://cdn.jsdelivr.net; font-src 'self';">
+  <link rel="icon" href="/public/favicon.svg" type="image/svg+xml">
+  <link rel="stylesheet" href="{{ asset_url('style.css') }}">
+  <link rel="preload" as="image" href="https://images.unsplash.com/photo-1526374965328-7f61d4dc18c5?w=1600&auto=format&fit=crop" fetchpriority="high">
+  <link rel="modulepreload" href="/public/js/app.js">
+  <link rel="modulepreload" href="/public/js/utils.js">
+{% endblock %}
+
+{% block content %}
+  <nav class="top" role="navigation" aria-label="Main navigation">
+    <div class="nav-inner">
+      <a class="brand" href="/" id="nav-brand"><img src="/public/zero-logo.png" alt="" class="brand-logo"><span>blog-zero</span></a>
+      <div class="nav-links" id="nav-links" role="tablist" aria-label="Views">
+        <button role="tab" aria-selected="true" data-route="home">Home</button>
+        <button role="tab" data-route="blog">Blog</button>
+        <a href="/public/about.html" class="nav-link" role="tab">About</a>
+        <button role="tab" data-route="compose" class="nav-role-writer hidden">Write</button>
+        <button role="tab" data-route="manage" class="nav-role-staff hidden">Manage</button>
+      </div>
+      <div class="nav-right">
+        <button class="theme-toggle desktop-only" id="theme-toggle" aria-label="Toggle dark mode" role="switch" aria-checked="true">
+          <span class="toggle-track">
+            <span class="toggle-icon">&#9790;</span>
+            <span class="toggle-icon">&#9788;</span>
+            <span class="toggle-thumb"></span>
+          </span>
+        </button>
+        <div class="auth-area" id="auth-area"></div>
+        <button class="hamburger" id="hamburger" aria-label="Menu" aria-expanded="false">
+          <span></span><span></span><span></span>
+        </button>
+      </div>
+    </div>
+  </nav>
+
+  <main class="wrap" role="main">
+    <div class="auth-panel" id="auth-panel" role="dialog" aria-label="Authentication" inert>
+      <button class="auth-close" id="auth-close" aria-label="Close">&times;</button>
+      <img src="/public/zero-logo.png" alt="blog-zero" class="auth-logo">
+      <h3 id="auth-panel-title">Sign in</h3>
+      <p class="auth-subtitle" id="auth-subtitle">Welcome back to blog-zero</p>
+      <div class="auth-fields">
+        <div id="auth-name-row" class="hidden">
+          <input id="auth-name" placeholder="Your name" autocomplete="name">
+        </div>
+        <input id="auth-email" placeholder="Email address" type="email" autocomplete="email">
+        <input id="auth-password" type="password" placeholder="Password" autocomplete="current-password">
+      </div>
+      <button class="btn btn-primary auth-submit-btn" id="auth-submit">Continue</button>
+      <p class="auth-switch" id="auth-switch"></p>
+    </div>
+
+    <section class="view {% if post is not defined %}active{% endif %}" id="view-home" aria-label="Home">
+      <div class="hero" id="hero" role="banner" aria-label="Featured">
+        <div class="hero-slide" id="hero-slide-a"></div>
+        <div class="hero-slide" id="hero-slide-b"></div>
+        <div class="hero-overlay" id="hero-overlay"></div>
+        <div class="hero-content">
+          <h1 id="hero-headline"></h1>
+          <p id="hero-caption"></p>
+        </div>
+        <div class="hero-dots" id="hero-dots" aria-label="Slide navigation"></div>
+      </div>
+      <header class="feed-header">
+        <h1 tabindex="-1">Recent Posts</h1>
+      </header>
+      <div id="home-recent" aria-label="Recent posts"></div>
+    </section>
+
+    <section class="view" id="view-blog" aria-label="Browse posts">
+      <header class="feed-header">
+        <h1 id="blog-title" tabindex="-1">Blog</h1>
+      </header>
+      <div class="blog-toolbar">
+        <input type="search" id="blog-search" class="search-bar" placeholder="Search posts..." aria-label="Search posts">
+        <div class="sort-toggle" id="blog-sort">
+          <button class="active" data-sort="newest">Newest</button>
+          <button data-sort="oldest">Oldest</button>
+        </div>
+      </div>
+      <div class="tag-chips" id="blog-tags" aria-label="Filter by tag"></div>
+      <div id="blog-list" role="feed" aria-label="Posts"></div>
+    </section>
+
+    <section class="view" id="view-article" aria-label="Article">
+      <article class="article" id="article-content"></article>
+    </section>
+
+    <section class="view" id="view-compose" aria-label="Post editor">
+      <div class="ev" id="compose-root">
+
+        <div class="ev-bar">
+          <button class="ev-back" id="compose-close" aria-label="Close editor">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M19 12H5M12 19l-7-7 7-7"/></svg>
+          </button>
+          <span id="compose-edit-hint" class="ev-hint"></span>
+          <div class="ev-status">
+            <span id="compose-wordcount">0 words</span>
+            <span class="dot"></span>
+            <span id="compose-readtime">1 min read</span>
+            <span id="compose-save-status" class="ev-save"></span>
+          </div>
+          <button class="ev-preview-toggle" id="compose-preview-toggle" title="Preview (Cmd+P)">
+            <svg class="ev-icon-eye" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>
+            <svg class="ev-icon-pen hidden" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 20h9"/><path d="M16.5 3.5a2.121 2.121 0 013 3L7 19l-4 1 1-4L16.5 3.5z"/></svg>
+            <span id="compose-preview-label">Preview</span>
+          </button>
+          <div class="ev-actions">
+            <button class="btn btn-outline btn-sm" id="btn-draft">Draft</button>
+            <button class="btn btn-primary btn-sm" id="btn-publish">Publish</button>
+          </div>
+          <input type="hidden" id="compose-edit-id">
+        </div>
+
+        <div class="ev-canvas" id="compose-canvas">
+          <div class="ev-toolbar" id="compose-toolbar">
+            <button data-cmd="bold" title="Bold (Cmd+B)"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M6 4h8a4 4 0 014 4 4 4 0 01-4 4H6z"/><path d="M6 12h9a4 4 0 014 4 4 4 0 01-4 4H6z"/></svg></button>
+            <button data-cmd="italic" title="Italic (Cmd+I)"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="19" y1="4" x2="10" y2="4"/><line x1="14" y1="20" x2="5" y2="20"/><line x1="15" y1="4" x2="9" y2="20"/></svg></button>
+            <button data-cmd="heading" title="Heading"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 12h8M4 4v16M12 4v16M18 8l2 2 2-2M20 10v8"/></svg></button>
+            <span class="toolbar-sep"></span>
+            <button data-cmd="quote" title="Blockquote"><svg width="15" height="15" viewBox="0 0 24 24" fill="currentColor"><path d="M4.583 17.321C3.553 16.227 3 15 3 13.011c0-3.5 2.457-6.637 6.03-8.188l.893 1.378c-3.335 1.804-3.987 4.145-4.247 5.621.537-.278 1.24-.375 1.929-.311C9.591 11.69 11 13.201 11 15c0 1.933-1.567 3.5-3.5 3.5-1.195 0-2.317-.556-2.917-1.679zm10 0C13.553 16.227 13 15 13 13.011c0-3.5 2.457-6.637 6.03-8.188l.893 1.378c-3.335 1.804-3.987 4.145-4.247 5.621.537-.278 1.24-.375 1.929-.311C19.591 11.69 21 13.201 21 15c0 1.933-1.567 3.5-3.5 3.5-1.195 0-2.317-.556-2.917-1.679z"/></svg></button>
+            <button data-cmd="code" title="Inline code (Cmd+E)"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="16 18 22 12 16 6"/><polyline points="8 6 2 12 8 18"/></svg></button>
+            <button data-cmd="codeblock" title="Code block"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M8 8l-2 4 2 4M16 8l2 4-2 4"/></svg></button>
+            <span class="toolbar-sep"></span>
+            <button data-cmd="link" title="Link (Cmd+K)"><svg width="15" height="15" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M6.5 8.5a3 3 0 004.243 0l2-2a3 3 0 00-4.243-4.243l-1 1"/><path d="M9.5 7.5a3 3 0 00-4.243 0l-2 2a3 3 0 004.243 4.243l1-1"/></svg></button>
+            <button data-cmd="image" title="Insert image (Cmd+Shift+I)"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/><path d="M21 15l-5-5L5 21"/></svg></button>
+            <span class="toolbar-sep"></span>
+            <button data-cmd="ul" title="Bullet list"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="9" y1="6" x2="20" y2="6"/><line x1="9" y1="12" x2="20" y2="12"/><line x1="9" y1="18" x2="20" y2="18"/><circle cx="4.5" cy="6" r="1" fill="currentColor" stroke="none"/><circle cx="4.5" cy="12" r="1" fill="currentColor" stroke="none"/><circle cx="4.5" cy="18" r="1" fill="currentColor" stroke="none"/></svg></button>
+            <button data-cmd="ol" title="Numbered list"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="10" y1="6" x2="21" y2="6"/><line x1="10" y1="12" x2="21" y2="12"/><line x1="10" y1="18" x2="21" y2="18"/><path d="M4 5v2M4 4h1M3 7h2M3 11v1a1 1 0 001 1h1M5 11H3M3 16h2l-2 3h2" stroke-width="1.5" fill="none"/></svg></button>
+            <button data-cmd="hr" title="Horizontal rule"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="3" y1="12" x2="21" y2="12"/></svg></button>
+          </div>
+
+          <div class="ev-surface" id="compose-editor" data-mode="write">
+            <div class="ev-write" id="compose-write-pane">
+
+              <div class="ev-cover-zone" id="compose-cover-zone" role="button" tabindex="0" aria-label="Add cover image">
+                <div class="ev-cover-zone-empty" id="compose-cover-empty">
+                  <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/><path d="M21 15l-5-5L5 21"/></svg>
+                  <span>Upload cover image</span>
+                  <span class="ev-cover-or">or</span>
+                  <div class="ev-cover-url-row">
+                    <input class="ev-cover-url" id="compose-cover-url" type="url" placeholder="Paste image URL..." autocomplete="off" aria-label="Cover image URL">
+                    <button class="ev-cover-url-btn" id="compose-cover-url-go" type="button">Use</button>
+                  </div>
+                </div>
+                <div class="ev-cover-zone-preview hidden" id="compose-cover-preview">
+                  <img id="compose-cover-img" src="" alt="" />
+                  <div class="ev-cover-caption-row">
+                    <svg class="ev-cover-caption-icon" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M12 20h9"/><path d="M16.5 3.5a2.121 2.121 0 013 3L7 19l-4 1 1-4L16.5 3.5z"/></svg>
+                    <input class="ev-cover-caption" id="compose-cover-caption" placeholder="Add a caption..." autocomplete="off" aria-label="Cover image caption">
+                  </div>
+                  <div class="ev-cover-zone-actions">
+                    <button class="ev-cover-btn" id="compose-cover-change" type="button">
+                      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 2v6h-6M3 12a9 9 0 0115.36-6.36L21 8M3 22v-6h6M21 12a9 9 0 01-15.36 6.36L3 16"/></svg>
+                      Change
+                    </button>
+                    <button class="ev-cover-btn ev-cover-btn-remove" id="compose-cover-remove-btn" type="button">
+                      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 6L6 18M6 6l12 12"/></svg>
+                      Remove
+                    </button>
+                  </div>
+                </div>
+                <input type="file" id="compose-cover-file" accept="image/*" class="hidden" aria-hidden="true">
+              </div>
+
+              <input class="ev-title" id="compose-post-title" placeholder="Title" autocomplete="off" aria-label="Post title" tabindex="-1">
+              <div class="ev-byline" id="compose-byline">
+                <span class="ev-byline-label">by</span>
+                <input id="compose-author" placeholder="Your name" autocomplete="off" aria-label="Author alias">
+                <button class="ev-byline-edit" id="compose-author-edit" title="Change author alias" type="button">
+                  <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 20h9"/><path d="M16.5 3.5a2.121 2.121 0 013 3L7 19l-4 1 1-4L16.5 3.5z"/></svg>
+                </button>
+              </div>
+              <div class="ev-tagpicker" id="compose-tagpicker">
+                <div class="ev-tagpicker-pills" id="compose-tag-pills"></div>
+                <input id="compose-tag-input" placeholder="Add tag..." autocomplete="off" aria-label="Add a tag">
+              </div>
+              <textarea id="compose-body" placeholder="Tell your story..." aria-label="Post body in Markdown"></textarea>
+            </div>
+            <div class="ev-preview" id="compose-preview-pane">
+              <div class="prose" id="compose-preview">
+                <span class="placeholder-text">Start writing to see a live preview...</span>
+              </div>
+            </div>
+          </div>
+        </div>
+
+      </div>
+    </section>
+
+    <section class="view" id="view-manage" aria-label="Admin dashboard">
+      <div class="manage">
+        <h1 tabindex="-1">Manage</h1>
+        <p class="sub">Admin area for posts and comment moderation.</p>
+        <div class="stats" id="manage-stats"></div>
+        <div class="tabs" id="manage-tabs" role="tablist" aria-label="Post filters">
+          <button class="active" data-scope="all" role="tab">All</button>
+          <button data-scope="published" role="tab">Published</button>
+          <button data-scope="drafts" role="tab">Drafts</button>
+          <button data-scope="archived" role="tab">Archived</button>
+          <button data-scope="trash" role="tab">Trash</button>
+        </div>
+        <div class="manage-list" id="manage-list" aria-label="Posts list"></div>
+        <div class="pending-section">
+          <h3>Pending comments</h3>
+          <div id="pending-comments"></div>
+        </div>
+        <div class="pending-section">
+          <h3>Audit log <span class="audit-label">(auto-populated via hooks)</span></h3>
+          <div id="audit-log"></div>
+        </div>
+      </div>
+    </section>
+  </main>
+
+  <footer class="site-footer" id="site-footer">
+    <span id="footer-text"></span>
+    <nav class="footer-links">
+      <a href="https://github.com/ranfysvalle02/blog-zero" target="_blank" rel="noopener noreferrer"><svg class="footer-icon" viewBox="0 0 16 16" fill="currentColor"><path d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27.68 0 1.36.09 2 .27 1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.01 8.01 0 0016 8c0-4.42-3.58-8-8-8z"/></svg>GitHub</a>
+      <span class="footer-dot"></span>
+      <a href="https://pypi.org/project/mdb-engine/" target="_blank" rel="noopener noreferrer"><svg class="footer-icon" viewBox="0 0 16 16" fill="currentColor"><path d="M8.5 1.5l5 2.5v8l-5 2.5-5-2.5v-8l5-2.5zm0-1.5L2 2.75v9.5L8.5 15l6.5-2.75v-9.5L8.5 0z"/><path d="M8.5 5L5 6.75v4.5L8.5 13l3.5-1.75v-4.5L8.5 5z" opacity=".4"/></svg>PyPI</a>
+      <span class="footer-dot"></span>
+      <a href="/public/community.html">Guidelines &amp; Terms</a>
+    </nav>
+  </footer>
+
+  <div class="confirm-overlay" id="confirm-overlay" aria-hidden="true">
+    <div class="confirm-backdrop" id="confirm-backdrop"></div>
+    <div class="confirm-dialog" role="alertdialog" aria-modal="true" aria-labelledby="confirm-title" aria-describedby="confirm-msg">
+      <h3 id="confirm-title">Close editor?</h3>
+      <p id="confirm-msg">Any unsaved changes will be lost.</p>
+      <div class="confirm-actions">
+        <button class="btn btn-outline" id="confirm-cancel">Keep editing</button>
+        <button class="btn btn-danger" id="confirm-ok">Discard &amp; close</button>
+      </div>
+    </div>
+  </div>
+  <div class="toasts" id="toasts" role="status" aria-live="polite"></div>
+
+  {% if posts is defined %}
+  <script id="ssr-data" type="application/json">{{ {"route":"home","posts":posts,"tag_stats":tag_stats} | tojson }}</script>
+  {% elif post is defined %}
+  <script id="ssr-data" type="application/json">{{ {"route":"article","post":post,"comments":comments} | tojson }}</script>
+  {% endif %}
+
+  <script src="https://cdn.jsdelivr.net/npm/gsap@3/dist/gsap.min.js" defer></script>
+  <script type="module" src="/public/js/app.js"></script>
+{% endblock %}

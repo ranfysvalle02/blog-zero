@@ -22,7 +22,7 @@ export function renderCard(p, extraClass = "") {
   const bodyExcerpt = cover ? excerpt(stripCover(p.body)) : excerpt(p.body);
 
   return (
-    `<a href="/s/posts/${encodeURIComponent(p._id)}" class="card ${cover ? "card-has-cover" : ""} ${esc(extraClass)}" role="article">` +
+    `<a href="/posts/${encodeURIComponent(p._id)}" class="card ${cover ? "card-has-cover" : ""} ${esc(extraClass)}" role="article">` +
     coverHtml +
     `<div class="card-body">` +
     `<div class="meta">${author}<span>${fmtDate(p.created_at)}</span>${rt}${cc}${imageIndicator}</div>` +
@@ -34,14 +34,18 @@ export function renderCard(p, extraClass = "") {
   );
 }
 
-export async function handleArticleRoute(id) {
+export async function handleArticleRoute(id, ssrPost, ssrComments) {
   if (!id) { go("home"); return; }
   setState("currentPostId", id);
   const contentEl = $("#article-content");
   if (!contentEl) return;
-  contentEl.innerHTML = '<span class="loading-text">Loading...</span>';
-  const r = await api("getPost", { pathParams: { id } });
-  const p = r.data?.data;
+
+  let p = ssrPost?.data || ssrPost;
+  if (!p) {
+    contentEl.innerHTML = '<span class="loading-text">Loading...</span>';
+    const r = await api("getPost", { pathParams: { id } });
+    p = r.data?.data;
+  }
   if (!p) {
     contentEl.innerHTML = `<a href="#blog" class="back">\u2190 ${esc(UI_CONFIG.labels.backToPosts)}</a><p>${esc(UI_CONFIG.labels.postNotFound)}</p>`;
     return;
@@ -68,7 +72,7 @@ export async function handleArticleRoute(id) {
   const proseBody = cover ? stripCover(p.body || "") : (p.body || "");
 
   contentEl.innerHTML =
-    `<a href="#blog" class="back">\u2190 ${esc(UI_CONFIG.labels.backToPosts)}</a>` +
+    `<a href="/#blog" class="back">\u2190 ${esc(UI_CONFIG.labels.backToPosts)}</a>` +
     coverBanner +
     "<header>" +
     `<h1 tabindex="-1">${esc(p.title)}</h1>` +
@@ -80,13 +84,17 @@ export async function handleArticleRoute(id) {
 
   applyBgImages(contentEl);
   enhanceArticle(id);
-  if (UI_CONFIG.features.comments) loadComments(id).catch(() => {});
+  if (UI_CONFIG.features.comments) {
+    if (ssrComments) {
+      renderComments(Array.isArray(ssrComments) ? ssrComments : (ssrComments?.data || []));
+    } else {
+      loadComments(id).catch(() => {});
+    }
+  }
   return p;
 }
 
-async function loadComments(postId) {
-  const r = await api("listComments", { params: { filter: `post_id:${postId}`, scope: "approved", sort: "-created_at", limit: "100" } });
-  const cmts = r.data?.data || [];
+function renderComments(cmts) {
   const el = $("#comment-list");
   if (!el) return;
   if (!cmts.length) {
@@ -96,6 +104,11 @@ async function loadComments(postId) {
   el.innerHTML = cmts.map((c) =>
     `<div class="cmt"><div class="cmt-meta"><strong>${esc(c.author || "Anonymous")}</strong><span>${fmtDate(c.created_at)}</span></div><div class="cmt-body">${esc(c.body)}</div></div>`
   ).join("");
+}
+
+async function loadComments(postId) {
+  const r = await api("listComments", { params: { filter: `post_id:${postId}`, scope: "approved", sort: "-created_at", limit: "100" } });
+  renderComments(r.data?.data || []);
 }
 
 async function postComment() {

@@ -11,7 +11,7 @@ function renderHeadlineCard(p) {
   const rt = readTime(p.body);
 
   return (
-    `<a href="/s/posts/${encodeURIComponent(p._id)}" class="card-headline">` +
+    `<a href="/posts/${encodeURIComponent(p._id)}" class="card-headline">` +
       `<div class="card-headline-cover${cover ? "" : " card-headline-cover--empty"}" ${coverAttr}>` +
         `<div class="card-headline-overlay">` +
           `<div class="card-headline-meta"><span>${esc(p.author || "Anonymous")}</span><span class="dot"></span><span>${fmtDate(p.created_at)}</span><span class="dot"></span><span>${rt}</span></div>` +
@@ -30,7 +30,7 @@ function renderSecondaryCard(p) {
   const rt = readTime(p.body);
 
   return (
-    `<a href="/s/posts/${encodeURIComponent(p._id)}" class="card-secondary">` +
+    `<a href="/posts/${encodeURIComponent(p._id)}" class="card-secondary">` +
       (cover ? `<div class="card-secondary-cover" data-bg="${safeAttr(cover.src)}"></div>` : "") +
       `<div class="card-secondary-content">` +
         `<div class="meta"><span>${fmtDate(p.created_at)}</span><span class="dot"></span><span>${rt}</span></div>` +
@@ -43,30 +43,33 @@ function renderSecondaryCard(p) {
 
 function renderCompactCard(p) {
   return (
-    `<a href="/s/posts/${encodeURIComponent(p._id)}" class="card-compact">` +
+    `<a href="/posts/${encodeURIComponent(p._id)}" class="card-compact">` +
       `<h4>${esc(p.title)}</h4>` +
       `<div class="meta"><span>${fmtDate(p.created_at)}</span><span class="dot"></span><span>${readTime(p.body)}</span></div>` +
     `</a>`
   );
 }
 
-export async function loadHome() {
+export async function loadHome(ssrPosts) {
   if (!heroInitialized) {
     initHero();
     heroInitialized = true;
   }
 
   const container = $("#home-recent");
-  container.innerHTML = renderSkeleton(3);
 
-  const r = await api("listPosts", { params: { limit: "200" } });
-
-  if (r.networkError) {
-    container.innerHTML = renderError("Could not reach the server. Is the API running?", loadHome);
-    return;
+  let posts;
+  if (ssrPosts) {
+    posts = Array.isArray(ssrPosts) ? ssrPosts : (ssrPosts?.data || []);
+  } else {
+    container.innerHTML = renderSkeleton(3);
+    const r = await api("listPosts", { params: { limit: "200" } });
+    if (r.networkError) {
+      container.innerHTML = renderError("Could not reach the server. Is the API running?", loadHome);
+      return;
+    }
+    posts = r.data?.data || [];
   }
-
-  const posts = r.data?.data || [];
   if (!posts.length) {
     container.innerHTML = `<div class="feed-empty"><p>${esc(UI_CONFIG.labels.noPostsYet)}</p></div>`;
     return;

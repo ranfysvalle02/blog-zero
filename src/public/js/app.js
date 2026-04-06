@@ -1,30 +1,88 @@
 import { $, $$, BLOG_CONFIG, UI_CONFIG, state, setState, esc, hasRole, isAuthed } from "./utils.js";
 import { bindAuthEvents, refreshSession, showAuthPanel } from "./auth.js";
-import { bindArticleEvents } from "./feed.js";
+import { bindArticleEvents, handleArticleRoute } from "./feed.js";
 import { bindHomeEvents, loadHome } from "./home.js";
 import { bindBlogEvents, loadBlog } from "./blog.js";
 import { bindComposeEvents, handleComposeRoute } from "./compose.js";
 import { bindManageEvents, handleManageRoute } from "./manage.js";
 import { updateSeo } from "./seo.js";
 
-const routes = {
-  home: loadHome,
-  blog: loadBlog,
-  feed: () => { location.replace("#blog"); },
-  article: (id) => { if (id) location.replace(`/s/posts/${encodeURIComponent(id)}`); },
-  compose: handleComposeRoute,
-  manage: handleManageRoute,
-};
+// --- Legacy /s/ URL migration: rewrite to clean path before anything runs ---
+(function migrateLegacyUrl() {
+  const m = location.pathname.match(/^\/s\/posts\/([^/]+)$/);
+  if (m) {
+    history.replaceState(null, "", "/posts/" + m[1] + location.hash);
+    return;
+  }
+  if (location.pathname === "/s" || location.pathname === "/s/") {
+    history.replaceState(null, "", "/" + location.hash);
+  }
+})();
+
+// --- SSR data: consumed once on first boot, then discarded ---
+let ssrData = null;
+(function consumeSSRData() {
+  const el = document.getElementById("ssr-data");
+  if (!el) return;
+  try { ssrData = JSON.parse(el.textContent); } catch { /* ignore */ }
+  el.remove();
+})();
+
+const HASH_ROUTES = new Set(["blog", "compose", "manage", "feed"]);
+
+function getCurrentRoute() {
+  const hash = location.hash.slice(1);
+  if (hash) {
+    const [view, ...rest] = hash.split("/");
+    if (HASH_ROUTES.has(view)) return { view, param: rest.join("/") };
+  }
+  const m = location.pathname.match(/^\/posts\/([^/]+)$/);
+  if (m) return { view: "article", param: decodeURIComponent(m[1]) };
+  return { view: "home", param: "" };
+}
+
+export function navigate(pathOrView, param) {
+  if (pathOrView === "home" || pathOrView === "/") {
+    if (location.pathname !== "/") {
+      history.pushState(null, "", "/");
+    } else if (location.hash) {
+      history.pushState(null, "", "/");
+    }
+    handleRoute().catch(() => {});
+    return;
+  }
+
+  if (pathOrView === "article" || pathOrView.startsWith("/posts/")) {
+    const id = param || pathOrView.replace(/^\/posts\//, "");
+    const target = "/posts/" + encodeURIComponent(id);
+    if (location.pathname !== target) {
+      history.pushState(null, "", target);
+    }
+    handleRoute().catch(() => {});
+    return;
+  }
+
+  if (HASH_ROUTES.has(pathOrView)) {
+    if (location.pathname !== "/") {
+      location.href = "/#" + pathOrView + (param ? "/" + param : "");
+      return;
+    }
+    location.hash = pathOrView + (param ? "/" + param : "");
+    return;
+  }
+
+  location.hash = pathOrView + (param ? "/" + param : "");
+}
 
 function roleGuard(view) {
   if (view === "compose" && !hasRole("editor")) {
     showAuthPanel("login");
-    location.hash = "home";
+    navigate("home");
     return false;
   }
   if (view === "manage" && !hasRole("editor") && !hasRole("moderator")) {
     showAuthPanel("login");
-    location.hash = "home";
+    navigate("home");
     return false;
   }
   return true;
@@ -49,10 +107,14 @@ function updateRouteUi(view) {
   }
 }
 
+let lastProcessedUrl = "";
+
 async function handleRoute() {
-  const raw = location.hash.slice(1) || "home";
-  const [view, ...rest] = raw.split("/");
-  const param = rest.join("/");
+  const url = location.pathname + location.hash;
+  if (url === lastProcessedUrl && !initialLoad) return;
+  lastProcessedUrl = url;
+
+  const { view, param } = getCurrentRoute();
   if (!roleGuard(view)) return;
   setState("currentView", view);
 
@@ -63,7 +125,28 @@ async function handleRoute() {
     updateRouteUi(view);
   }
 
-  const data = routes[view] ? await routes[view](param) : null;
+  let data = null;
+  if (view === "home") {
+    const ssrPosts = ssrData?.route === "home" ? ssrData.posts : null;
+    const ssrTags = ssrData?.route === "home" ? ssrData.tag_stats : null;
+    data = await loadHome(ssrPosts);
+    ssrData = null;
+  } else if (view === "article") {
+    const ssrPost = ssrData?.route === "article" ? ssrData.post : null;
+    const ssrComments = ssrData?.route === "article" ? ssrData.comments : null;
+    data = await handleArticleRoute(param, ssrPost, ssrComments);
+    ssrData = null;
+  } else if (view === "blog") {
+    data = await loadBlog();
+  } else if (view === "feed") {
+    navigate("blog");
+    return;
+  } else if (view === "compose") {
+    data = await handleComposeRoute(param);
+  } else if (view === "manage") {
+    data = await handleManageRoute(param);
+  }
+
   updateSeo(view, data);
   if (!initialLoad) window.scrollTo(0, 0);
   initialLoad = false;
@@ -73,7 +156,38 @@ function bindNav() {
   $("#nav-links").addEventListener("click", (e) => {
     const btn = e.target.closest("[data-route]");
     if (!btn) return;
-    location.hash = btn.dataset.route;
+    navigate(btn.dataset.route);
+  });
+}
+
+function initLinkInterceptor() {
+  document.addEventListener("click", (e) => {
+    const a = e.target.closest("a[href]");
+    if (!a) return;
+    const href = a.getAttribute("href");
+    if (!href) return;
+
+    const postMatch = href.match(/^\/posts\/([^#?]+)/);
+    if (postMatch) {
+      e.preventDefault();
+      navigate("article", decodeURIComponent(postMatch[1]));
+      return;
+    }
+
+    if (href === "/") {
+      e.preventDefault();
+      navigate("home");
+      return;
+    }
+
+    if (href.startsWith("/#")) {
+      const route = href.slice(2);
+      if (HASH_ROUTES.has(route)) {
+        e.preventDefault();
+        navigate(route);
+        return;
+      }
+    }
   });
 }
 
@@ -122,7 +236,7 @@ function initHamburger() {
     const isLight = document.documentElement.getAttribute("data-theme") === "light";
     const logoSrc = BLOG_CONFIG.brand.logo || "/public/zero-logo.png";
     const brandText = esc(BLOG_CONFIG.brand.text || "blog-zero");
-    const currentView = location.hash.slice(1).split("/")[0] || "home";
+    const currentView = getCurrentRoute().view;
 
     const navItems = [
       { label: "Home", route: "home" },
@@ -158,8 +272,7 @@ function initHamburger() {
 
     drawer.innerHTML =
       `<div class="drawer-header">` +
-      `<a class="drawer-brand" href="#home">${logoSrc ? `<img src="${logoSrc}" alt="">` : ""}${brandText}</a>` +
-      `<button class="drawer-close" aria-label="Close menu">&times;</button>` +
+      `<a class="drawer-brand" href="/">${logoSrc ? `<img src="${logoSrc}" alt="">` : ""}${brandText}</a>` +
       `</div>` +
       `<nav class="drawer-nav">${linksHtml}</nav>` +
       `<div class="drawer-footer">` +
@@ -203,7 +316,7 @@ function initHamburger() {
 
     const routeBtn = e.target.closest("[data-route]");
     if (routeBtn) {
-      location.hash = routeBtn.dataset.route;
+      navigate(routeBtn.dataset.route);
       closeDrawer();
       return;
     }
@@ -268,6 +381,7 @@ async function boot() {
   initHamburger();
   injectConfig();
   bindNav();
+  initLinkInterceptor();
   bindAuthEvents();
   bindHomeEvents();
   bindBlogEvents();
@@ -276,13 +390,15 @@ async function boot() {
   bindManageEvents();
 
   window.addEventListener("feed:refresh", () => {
-    const v = location.hash.slice(1).split("/")[0] || "home";
+    const v = getCurrentRoute().view;
     if (v === "home") loadHome().catch(() => {});
     else if (v === "blog") loadBlog().catch(() => {});
   });
 
   await refreshSession();
+
   window.addEventListener("hashchange", () => handleRoute().catch(() => {}));
+  window.addEventListener("popstate", () => handleRoute().catch(() => {}));
   handleRoute().catch(() => {});
 
   const pendingAuth = localStorage.getItem("blog-zero-auth");

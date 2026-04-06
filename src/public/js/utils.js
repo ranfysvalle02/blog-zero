@@ -97,7 +97,7 @@ export const state = {
 
 export const $ = (s) => document.querySelector(s);
 export const $$ = (s) => [...document.querySelectorAll(s)];
-export const go = (path) => { location.hash = path; };
+export function go(path) { import("./app.js").then((m) => m.navigate(path)); }
 export const setState = (k, v) => { state[k] = v; };
 
 const _escDiv = document.createElement("div");
@@ -122,7 +122,7 @@ export function readTime(body) {
 }
 
 export function shareUrl(postId) {
-  return `${location.origin}/s/posts/${encodeURIComponent(postId)}`;
+  return `${location.origin}/posts/${encodeURIComponent(postId)}`;
 }
 
 export function renderShareBar(postId, title) {

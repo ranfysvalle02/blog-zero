@@ -50,14 +50,14 @@
   function buildDrawer() {
     var isLight = document.documentElement.getAttribute("data-theme") === "light";
     var links = [
-      { label: "Home", href: "/#home" },
+      { label: "Home", href: "/" },
       { label: "Blog", href: "/#blog" },
       { label: "About", href: "/public/about.html" },
       { label: "Write", href: "/#compose" },
     ];
     drawer.innerHTML =
       '<div class="drawer-header">' +
-      '<a class="drawer-brand" href="/#home"><img src="/public/zero-logo.png" alt="">blog-zero</a>' +
+      '<a class="drawer-brand" href="/"><img src="/public/zero-logo.png" alt="">blog-zero</a>' +
       '<button class="drawer-close" aria-label="Close menu">&times;</button></div>' +
       '<nav class="drawer-nav">' +
       links.map(function (l) {
@@ -67,8 +67,8 @@
       "</nav>" +
       '<div class="drawer-footer">' +
       '<div class="drawer-auth">' +
-      '<a href="/#home" class="btn btn-outline" data-auth-redirect="login">Sign in</a>' +
-      '<a href="/#home" class="btn btn-primary" data-auth-redirect="register">Register</a>' +
+      '<a href="/" class="btn btn-outline" data-auth-redirect="login">Sign in</a>' +
+      '<a href="/" class="btn btn-primary" data-auth-redirect="register">Register</a>' +
       "</div>" +
       '<div class="drawer-theme"><span>Dark mode</span>' +
       '<button class="theme-toggle" aria-label="Toggle dark mode" role="switch" aria-checked="' + !isLight + '">' +
