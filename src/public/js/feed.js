@@ -51,10 +51,6 @@ export async function handleArticleRoute(id, ssrPost, ssrComments) {
     return;
   }
 
-  const tags = UI_CONFIG.features.tags
-    ? (p.tags || []).map((t) => `<span class="tag tag-neutral">${esc(t)}</span>`).join(" ")
-    : "";
-  const rt = UI_CONFIG.features.readTime ? `<span class="dot"></span><span>${readTime(p.body)}</span>` : "";
   let commentSection = "";
   if (UI_CONFIG.features.comments) {
     const composer = !isAuthed()
@@ -62,6 +58,28 @@ export async function handleArticleRoute(id, ssrPost, ssrComments) {
       : `<div class="comment-composer"><textarea id="comment-body" placeholder="${safeAttr(UI_CONFIG.labels.commentPrompt)}"></textarea><div><button class="btn btn-primary btn-sm" data-action="post-comment">${esc(UI_CONFIG.labels.postComment)}</button></div></div><div class="notice">${esc(UI_CONFIG.labels.commentPending)} <a href="/community" target="_blank">Read guidelines</a></div>`;
     commentSection = `<div class="comments"><h3>${esc(UI_CONFIG.labels.commentsTitle)}</h3>${composer}<div id="comment-list"><span class="loading-text">Loading comments...</span></div></div>`;
   }
+
+  const ssrProse = contentEl.querySelector(".prose[data-ssr]");
+  if (ssrProse) {
+    ssrProse.removeAttribute("data-ssr");
+    const header = contentEl.querySelector("header");
+    if (header) header.insertAdjacentHTML("afterend", renderShareBar(id, p.title));
+    if (commentSection) contentEl.insertAdjacentHTML("beforeend", commentSection);
+    enhanceArticle(id);
+    if (UI_CONFIG.features.comments) {
+      if (ssrComments) {
+        renderComments(Array.isArray(ssrComments) ? ssrComments : (ssrComments?.data || []));
+      } else {
+        loadComments(id).catch(() => {});
+      }
+    }
+    return p;
+  }
+
+  const tags = UI_CONFIG.features.tags
+    ? (p.tags || []).map((t) => `<span class="tag tag-neutral">${esc(t)}</span>`).join(" ")
+    : "";
+  const rt = UI_CONFIG.features.readTime ? `<span class="dot"></span><span>${readTime(p.body)}</span>` : "";
 
   const cover = extractCover(p.body || "");
   const coverCaption = cover?.alt && cover.alt !== p.title

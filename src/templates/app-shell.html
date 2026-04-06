@@ -8,27 +8,29 @@
 
 {% block head %}
   <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' https://cdn.jsdelivr.net 'sha256-9Qa6J7TaZvhLK9RCAyMWk0sTYdtT1U9fOjKXSisTySQ='; style-src 'self' 'unsafe-hashes' 'sha256-t6oewASd7J1vBg5mQtX4hl8bg8FeegYFM3scKLIhYUc='; img-src 'self' https://images.unsplash.com data:; connect-src 'self' https://cdn.jsdelivr.net; font-src 'self';">
-  <link rel="icon" href="/public/favicon.svg" type="image/svg+xml">
+  <link rel="icon" href="{{ asset_url('favicon.svg') }}" type="image/svg+xml">
   <link rel="stylesheet" href="{{ asset_url('style.css') }}">
   {% if post is not defined %}
   <link rel="preload" as="image" href="https://images.unsplash.com/photo-1526374965328-7f61d4dc18c5?w=1600&auto=format&fit=crop" fetchpriority="high">
   {% elif post.cover_image %}
   <link rel="preload" as="image" href="{{ post.cover_image }}" fetchpriority="high">
   {% endif %}
-  <link rel="modulepreload" href="/public/js/app.js">
-  <link rel="modulepreload" href="/public/js/utils.js">
-  <link rel="modulepreload" href="/public/js/feed.js">
-  <link rel="modulepreload" href="/public/js/auth.js">
-  <link rel="modulepreload" href="/public/js/article-enhance.js">
-  <link rel="modulepreload" href="/public/js/image-gallery.js">
+  <link rel="modulepreload" href="{{ asset_url('js/app.js') }}">
+  <link rel="modulepreload" href="{{ asset_url('js/utils.js') }}">
+  <link rel="modulepreload" href="{{ asset_url('js/feed.js') }}">
+  <link rel="modulepreload" href="{{ asset_url('js/auth.js') }}">
+  <link rel="modulepreload" href="{{ asset_url('js/article-enhance.js') }}">
+  <link rel="modulepreload" href="{{ asset_url('js/image-gallery.js') }}">
+  {% if post is not defined %}
   <link rel="modulepreload" href="https://cdn.jsdelivr.net/npm/marked/lib/marked.esm.js">
   <link rel="modulepreload" href="https://cdn.jsdelivr.net/npm/dompurify/dist/purify.es.mjs">
+  {% endif %}
 {% endblock %}
 
 {% block content %}
   <nav class="top" role="navigation" aria-label="Main navigation">
     <div class="nav-inner">
-      <a class="brand" href="/" id="nav-brand"><img src="/public/zero-logo.png" alt="" class="brand-logo"><span>blog-zero</span></a>
+      <a class="brand" href="/" id="nav-brand"><img src="{{ asset_url('zero-logo.png') }}" alt="" class="brand-logo"><span>blog-zero</span></a>
       <div class="nav-links" id="nav-links" role="tablist" aria-label="Views">
         <button role="tab" aria-selected="true" data-route="home">Home</button>
         <button role="tab" data-route="blog">Blog</button>
@@ -55,7 +57,7 @@
   <main class="wrap" role="main">
     <div class="auth-panel" id="auth-panel" role="dialog" aria-label="Authentication" inert>
       <button class="auth-close" id="auth-close" aria-label="Close">&times;</button>
-      <img src="/public/zero-logo.png" alt="blog-zero" class="auth-logo">
+      <img src="{{ asset_url('zero-logo.png') }}" alt="blog-zero" class="auth-logo">
       <h3 id="auth-panel-title">Sign in</h3>
       <p class="auth-subtitle" id="auth-subtitle">Welcome back to blog-zero</p>
       <div class="auth-fields">
@@ -118,9 +120,14 @@
             {% if post.reading_time %}<span class="dot"></span><span>{{ post.reading_time }} min read</span>{% endif %}
           </div>
         </header>
-        <div class="prose prose-ssr-skeleton" style="min-height: {{ ((post.reading_time or 3) * 180) }}px;">
-          <p>Loading article content...</p>
-        </div>
+        {% set body_text = post.body or '' %}
+        {% if post.cover_image and not post.cover_image.startswith('data:') and body_text.startswith('![') and '\n' in body_text %}
+        <div class="prose" data-ssr>{{ body_text.split('\n', 1)[1] | markdown | safe }}</div>
+        {% elif body_text %}
+        <div class="prose" data-ssr>{{ body_text | markdown | safe }}</div>
+        {% else %}
+        <div class="prose" data-ssr></div>
+        {% endif %}
         {% endif %}
       </article>
     </section>
@@ -285,5 +292,5 @@
   {% if post is not defined %}
   <script src="https://cdn.jsdelivr.net/npm/gsap@3/dist/gsap.min.js" defer></script>
   {% endif %}
-  <script type="module" src="/public/js/app.js"></script>
+  <script type="module" src="{{ asset_url('js/app.js') }}"></script>
 {% endblock %}

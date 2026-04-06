@@ -329,6 +329,9 @@
             }
           }
         },
+        "preload": [
+          { "href": "/public/js/app.js", "as": "script" }
+        ],
         "cache": { "ttl": "0s" }
       },
       "/about": {
@@ -365,6 +368,9 @@
           "og_type": "article",
           "og_image": "/og/posts/{{post._id}}.png"
         },
+        "preload": [
+          { "href": "/public/js/app.js", "as": "script" }
+        ],
         "cache": { "ttl": "0s" }
       }
     }

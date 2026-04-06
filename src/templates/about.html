@@ -8,14 +8,14 @@
 
 {% block head %}
   <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' https://cdn.jsdelivr.net; style-src 'self'; img-src 'self' https://images.unsplash.com data:; connect-src 'self' https://cdn.jsdelivr.net; font-src 'self';">
-  <link rel="icon" href="/public/favicon.svg" type="image/svg+xml">
+  <link rel="icon" href="{{ asset_url('favicon.svg') }}" type="image/svg+xml">
   <link rel="stylesheet" href="{{ asset_url('style.css') }}">
 {% endblock %}
 
 {% block content %}
   <nav class="top" role="navigation" aria-label="Main navigation">
     <div class="nav-inner">
-      <a class="brand" href="/"><img src="/public/zero-logo.png" alt="" class="brand-logo"><span>blog-zero</span></a>
+      <a class="brand" href="/"><img src="{{ asset_url('zero-logo.png') }}" alt="" class="brand-logo"><span>blog-zero</span></a>
       <div class="nav-links" id="nav-links" role="tablist" aria-label="Views">
         <a href="/" class="nav-link" role="tab">Home</a>
         <a href="/#blog" class="nav-link" role="tab">Blog</a>
@@ -103,5 +103,5 @@
     </nav>
   </footer>
 
-  <script src="/public/js/page-shell.js"></script>
+  <script src="{{ asset_url('js/page-shell.js') }}"></script>
 {% endblock %}
