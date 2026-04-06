@@ -10,9 +10,19 @@
   <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' https://cdn.jsdelivr.net 'sha256-9Qa6J7TaZvhLK9RCAyMWk0sTYdtT1U9fOjKXSisTySQ='; style-src 'self' 'unsafe-hashes' 'sha256-t6oewASd7J1vBg5mQtX4hl8bg8FeegYFM3scKLIhYUc='; img-src 'self' https://images.unsplash.com data:; connect-src 'self' https://cdn.jsdelivr.net; font-src 'self';">
   <link rel="icon" href="/public/favicon.svg" type="image/svg+xml">
   <link rel="stylesheet" href="{{ asset_url('style.css') }}">
+  {% if post is not defined %}
   <link rel="preload" as="image" href="https://images.unsplash.com/photo-1526374965328-7f61d4dc18c5?w=1600&auto=format&fit=crop" fetchpriority="high">
+  {% elif post.cover_image %}
+  <link rel="preload" as="image" href="{{ post.cover_image }}" fetchpriority="high">
+  {% endif %}
   <link rel="modulepreload" href="/public/js/app.js">
   <link rel="modulepreload" href="/public/js/utils.js">
+  <link rel="modulepreload" href="/public/js/feed.js">
+  <link rel="modulepreload" href="/public/js/auth.js">
+  <link rel="modulepreload" href="/public/js/article-enhance.js">
+  <link rel="modulepreload" href="/public/js/image-gallery.js">
+  <link rel="modulepreload" href="https://cdn.jsdelivr.net/npm/marked/lib/marked.esm.js">
+  <link rel="modulepreload" href="https://cdn.jsdelivr.net/npm/dompurify/dist/purify.es.mjs">
 {% endblock %}
 
 {% block content %}
@@ -233,7 +243,7 @@
     </nav>
   </footer>
 
-  <div class="confirm-overlay" id="confirm-overlay" aria-hidden="true">
+  <div class="confirm-overlay" id="confirm-overlay" aria-hidden="true" inert>
     <div class="confirm-backdrop" id="confirm-backdrop"></div>
     <div class="confirm-dialog" role="alertdialog" aria-modal="true" aria-labelledby="confirm-title" aria-describedby="confirm-msg">
       <h3 id="confirm-title">Close editor?</h3>
@@ -252,6 +262,8 @@
   <script id="ssr-data" type="application/json">{{ {"route":"article","post":post,"comments":comments} | tojson }}</script>
   {% endif %}
 
+  {% if post is not defined %}
   <script src="https://cdn.jsdelivr.net/npm/gsap@3/dist/gsap.min.js" defer></script>
+  {% endif %}
   <script type="module" src="/public/js/app.js"></script>
 {% endblock %}

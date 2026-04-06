@@ -190,11 +190,13 @@ export function showConfirm({ title = "Are you sure?", message = "", okLabel = "
     $("#confirm-cancel").textContent = cancelLabel;
     overlay.classList.add("active");
     overlay.setAttribute("aria-hidden", "false");
+    overlay.inert = false;
     $("#confirm-cancel").focus();
 
     function cleanup(result) {
       overlay.classList.remove("active");
       overlay.setAttribute("aria-hidden", "true");
+      overlay.inert = true;
       $("#confirm-ok").removeEventListener("click", onOk);
       $("#confirm-cancel").removeEventListener("click", onCancel);
       $("#confirm-backdrop").removeEventListener("click", onCancel);

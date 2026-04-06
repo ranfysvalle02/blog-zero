@@ -900,6 +900,8 @@ a.card:hover, a.card-headline:hover, a.card-secondary:hover, a.card-compact:hove
 .prose table { width: 100%; border-collapse: collapse; margin: 14px 0; font-family: var(--font-sans); font-size: 0.9rem; }
 .prose th, .prose td { padding: 8px 12px; border: 1px solid var(--border); text-align: left; }
 .prose th { background: var(--surface-2); font-weight: 600; color: var(--text); }
+.prose a { text-decoration: underline; text-decoration-skip-ink: auto; text-underline-offset: 2px; }
+.prose a:hover { text-decoration-thickness: 2px; }
 
 /* --- Comments --- */
 .comments { margin-top: 42px; border-top: 1px solid var(--border); padding-top: 26px; }
