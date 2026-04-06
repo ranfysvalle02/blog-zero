@@ -1,0 +1,116 @@
+{% extends "mdb_base.html" %}
+
+{% block title %}{{ seo.title }}{% endblock %}
+
+{% block seo_meta %}
+  {{ super() }}
+{% endblock %}
+
+{% block head %}
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' https://cdn.jsdelivr.net; style-src 'self'; img-src 'self' https://images.unsplash.com data:; connect-src 'self' https://cdn.jsdelivr.net; font-src 'self';">
+  <link rel="icon" href="/public/favicon.svg" type="image/svg+xml">
+  <link rel="stylesheet" href="{{ asset_url('style.css') }}">
+{% endblock %}
+
+{% block content %}
+  <nav class="top" role="navigation" aria-label="Main navigation">
+    <div class="nav-inner">
+      <a class="brand" href="/"><img src="/public/zero-logo.png" alt="" class="brand-logo"><span>blog-zero</span></a>
+      <div class="nav-links" id="nav-links" role="tablist" aria-label="Views">
+        <a href="/" class="nav-link" role="tab">Home</a>
+        <a href="/#blog" class="nav-link" role="tab">Blog</a>
+        <a href="/about" class="nav-link" role="tab">About</a>
+        <a href="/#compose" class="nav-link" role="tab" id="shell-nav-write">Write</a>
+      </div>
+      <div class="nav-right">
+        <button class="theme-toggle desktop-only" aria-label="Toggle dark mode" role="switch" aria-checked="true">
+          <span class="toggle-track">
+            <span class="toggle-icon">&#9790;</span>
+            <span class="toggle-icon">&#9788;</span>
+            <span class="toggle-thumb"></span>
+          </span>
+        </button>
+        <div class="auth-area">
+          <a href="/" class="btn btn-outline btn-sm" data-auth-redirect="login">Sign in</a>
+          <a href="/" class="btn btn-primary btn-sm" data-auth-redirect="register">Register</a>
+        </div>
+        <button class="hamburger" id="hamburger" aria-label="Menu" aria-expanded="false">
+          <span></span><span></span><span></span>
+        </button>
+      </div>
+    </div>
+  </nav>
+
+  <main class="wrap" role="main">
+    <article class="article">
+      <header>
+        <h1 tabindex="-1">Community Guidelines &amp; Terms</h1>
+      </header>
+      <div class="prose">
+
+        <h2>Our Community</h2>
+        <p>
+          blog-zero is a space for sharing ideas, learning, and thoughtful conversation.
+          Everyone who participates — whether reading, writing, or commenting — is part of
+          this community. We ask that you help us keep it welcoming and constructive.
+        </p>
+
+        <h2>Comment Guidelines</h2>
+        <p>When leaving comments, please follow these principles:</p>
+        <ul>
+          <li><strong>Be respectful.</strong> Disagree with ideas, not people. No personal attacks, harassment, or hate speech of any kind.</li>
+          <li><strong>Be constructive.</strong> Add to the conversation. If you disagree, explain why thoughtfully.</li>
+          <li><strong>Stay on topic.</strong> Keep comments relevant to the post you're responding to.</li>
+          <li><strong>No spam or self-promotion.</strong> Don't use comments to advertise products, services, or unrelated links.</li>
+          <li><strong>No harmful content.</strong> Do not post content that is illegal, threatening, obscene, or violates anyone's rights.</li>
+          <li><strong>Protect privacy.</strong> Never share personal information about yourself or others (phone numbers, addresses, etc.).</li>
+        </ul>
+        <p>
+          All comments require admin approval before they appear publicly.
+          Comments that violate these guidelines will not be approved and may result
+          in account restrictions.
+        </p>
+
+        <h2>Terms of Use</h2>
+        <p>By using this blog, you agree to the following:</p>
+        <ul>
+          <li>You are responsible for any content you post, including comments.</li>
+          <li>You grant blog-zero a non-exclusive right to display your comments alongside the posts they respond to.</li>
+          <li>We reserve the right to remove any content or restrict any account that violates these guidelines, at our sole discretion.</li>
+          <li>We may update these guidelines at any time. Continued use of the blog constitutes acceptance of any changes.</li>
+        </ul>
+
+        <h2>Privacy</h2>
+        <p>We take your privacy seriously. Here's what we collect and why:</p>
+        <ul>
+          <li><strong>Account info:</strong> Your email and name are stored to identify your account and display your comments. We do not share this with third parties.</li>
+          <li><strong>Comments:</strong> Your comments are stored and displayed publicly (after approval). You can request deletion of your comments by contacting the admin.</li>
+          <li><strong>Cookies:</strong> We use a session cookie for authentication and a local storage key for your theme preference. No tracking cookies, no analytics.</li>
+          <li><strong>No third-party tracking:</strong> We do not use Google Analytics, Facebook Pixel, or any other third-party tracking service.</li>
+        </ul>
+
+        <h2>Contact</h2>
+        <p>
+          If you have concerns about content on this blog, want to report a violation,
+          or request deletion of your data, reach out to the site administrator.
+        </p>
+
+        <hr>
+        <p><a href="/">&larr; Back to home</a></p>
+      </div>
+    </article>
+  </main>
+
+  <footer class="site-footer">
+    <span>Powered by blog-zero</span>
+    <nav class="footer-links">
+      <a href="https://github.com/ranfysvalle02/blog-zero" target="_blank" rel="noopener noreferrer"><svg class="footer-icon" viewBox="0 0 16 16" fill="currentColor"><path d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27.68 0 1.36.09 2 .27 1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.01 8.01 0 0016 8c0-4.42-3.58-8-8-8z"/></svg>GitHub</a>
+      <span class="footer-dot"></span>
+      <a href="https://pypi.org/project/mdb-engine/" target="_blank" rel="noopener noreferrer"><svg class="footer-icon" viewBox="0 0 16 16" fill="currentColor"><path d="M8.5 1.5l5 2.5v8l-5 2.5-5-2.5v-8l5-2.5zm0-1.5L2 2.75v9.5L8.5 15l6.5-2.75v-9.5L8.5 0z"/><path d="M8.5 5L5 6.75v4.5L8.5 13l3.5-1.75v-4.5L8.5 5z" opacity=".4"/></svg>PyPI</a>
+      <span class="footer-dot"></span>
+      <a href="/community">Guidelines &amp; Terms</a>
+    </nav>
+  </footer>
+
+  <script src="/public/js/page-shell.js"></script>
+{% endblock %}

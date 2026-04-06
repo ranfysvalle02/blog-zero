@@ -52,7 +52,7 @@
     var links = [
       { label: "Home", href: "/" },
       { label: "Blog", href: "/#blog" },
-      { label: "About", href: "/public/about.html" },
+      { label: "About", href: "/about" },
       { label: "Write", href: "/#compose" },
     ];
     drawer.innerHTML =

@@ -331,6 +331,20 @@
         },
         "cache": { "ttl": "0s" }
       },
+      "/about": {
+        "template": "about.html",
+        "seo": {
+          "title": "About — blog-zero",
+          "description": "About blog-zero — a full-featured blog built from a single JSON manifest."
+        }
+      },
+      "/community": {
+        "template": "community.html",
+        "seo": {
+          "title": "Community Guidelines & Terms — blog-zero",
+          "description": "Community guidelines, terms of use, and privacy practices for blog-zero."
+        }
+      },
       "/s/posts/{id}": {
         "template": "app-shell.html",
         "data": {

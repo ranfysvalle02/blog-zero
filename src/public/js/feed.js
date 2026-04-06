@@ -59,7 +59,7 @@ export async function handleArticleRoute(id, ssrPost, ssrComments) {
   if (UI_CONFIG.features.comments) {
     const composer = !isAuthed()
       ? `<div class="notice">${esc(UI_CONFIG.labels.signInToComment)} <a href="#" data-action="show-register">${esc(UI_CONFIG.labels.register)}</a> \u00b7 <a href="#" data-action="show-login">${esc(UI_CONFIG.labels.signIn)}</a></div>`
-      : `<div class="comment-composer"><textarea id="comment-body" placeholder="${safeAttr(UI_CONFIG.labels.commentPrompt)}"></textarea><div><button class="btn btn-primary btn-sm" data-action="post-comment">${esc(UI_CONFIG.labels.postComment)}</button></div></div><div class="notice">${esc(UI_CONFIG.labels.commentPending)} <a href="/public/community.html" target="_blank">Read guidelines</a></div>`;
+      : `<div class="comment-composer"><textarea id="comment-body" placeholder="${safeAttr(UI_CONFIG.labels.commentPrompt)}"></textarea><div><button class="btn btn-primary btn-sm" data-action="post-comment">${esc(UI_CONFIG.labels.postComment)}</button></div></div><div class="notice">${esc(UI_CONFIG.labels.commentPending)} <a href="/community" target="_blank">Read guidelines</a></div>`;
     commentSection = `<div class="comments"><h3>${esc(UI_CONFIG.labels.commentsTitle)}</h3>${composer}<div id="comment-list"><span class="loading-text">Loading comments...</span></div></div>`;
   }
 

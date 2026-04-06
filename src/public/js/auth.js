@@ -53,7 +53,7 @@ export function showAuthPanel(mode) {
   $("#auth-panel-title").textContent = isRegister ? "Create account" : "Sign in";
   const subtitle = $("#auth-subtitle");
   if (isRegister) {
-    subtitle.innerHTML = 'Join blog-zero \u00b7 By registering you agree to our <a href="/public/community.html" target="_blank">community guidelines</a>';
+    subtitle.innerHTML = 'Join blog-zero \u00b7 By registering you agree to our <a href="/community" target="_blank">community guidelines</a>';
   } else {
     subtitle.textContent = "Welcome back to blog-zero";
   }

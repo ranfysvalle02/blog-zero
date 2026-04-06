@@ -241,7 +241,7 @@ function initHamburger() {
     const navItems = [
       { label: "Home", route: "home" },
       { label: "Blog", route: "blog" },
-      { label: "About", href: "/public/about.html" },
+      { label: "About", href: "/about" },
     ];
     if (hasRole("editor")) navItems.push({ label: "Write", route: "compose" });
     if (hasRole("editor") || hasRole("moderator")) navItems.push({ label: "Manage", route: "manage" });
