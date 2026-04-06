@@ -251,12 +251,28 @@
       "ttl": { "field": "timestamp", "expire_after": "90d" }
     }
   },
+  "compression": {
+    "enabled": true,
+    "minimum_size": 300
+  },
+  "static_cache": {
+    "fonts": "max-age=31536000, immutable",
+    "styles": "max-age=604800, stale-while-revalidate=86400",
+    "scripts": "max-age=604800, stale-while-revalidate=86400",
+    "images": "max-age=2592000",
+    "minify": true
+  },
   "ssr": {
     "enabled": true,
     "site_name": "blog-zero",
     "site_description": "A full-featured blog built from a single JSON manifest.",
     "base_url": "https://blog.oblivio-company.com",
     "sitemap": true,
+    "preload": [
+      { "href": "/public/style.css", "as": "style" },
+      { "href": "/public/fonts/inter-latin.woff2", "as": "font", "crossorigin": true },
+      { "href": "/public/fonts/inter-latin-ext.woff2", "as": "font", "crossorigin": true }
+    ],
     "routes": {
       "/s": {
         "template": "index.html",

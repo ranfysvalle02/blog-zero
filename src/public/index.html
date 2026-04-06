@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' https://cdn.jsdelivr.net; style-src 'self' https://fonts.googleapis.com; img-src 'self' https://images.unsplash.com data:; connect-src 'self' https://cdn.jsdelivr.net https://fonts.googleapis.com https://fonts.gstatic.com; font-src 'self' https://fonts.gstatic.com;">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' https://cdn.jsdelivr.net; style-src 'self'; img-src 'self' https://images.unsplash.com data:; connect-src 'self' https://cdn.jsdelivr.net; font-src 'self';">
   <title>blog-zero</title>
   <meta name="description" content="A full-featured blog built from a single JSON manifest.">
   <meta property="og:title" content="zero-code blog">
@@ -14,11 +14,11 @@
   <meta name="twitter:title" content="zero-code blog">
   <meta name="twitter:description" content="A full-featured blog built from a single JSON manifest.">
   <meta name="twitter:image" content="/public/zero-logo.png">
-  <link rel="preconnect" href="https://fonts.googleapis.com">
-  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=Inter:opsz,wght@14..32,400..800&display=swap" rel="stylesheet">
   <link rel="icon" href="/public/favicon.svg" type="image/svg+xml">
   <link rel="stylesheet" href="/public/style.css">
+  <link rel="preload" as="image" href="https://images.unsplash.com/photo-1526374965328-7f61d4dc18c5?w=1600&auto=format&fit=crop" fetchpriority="high">
+  <link rel="modulepreload" href="/public/js/app.js">
+  <link rel="modulepreload" href="/public/js/utils.js">
 </head>
 <body>
   <nav class="top" role="navigation" aria-label="Main navigation">
@@ -250,7 +250,7 @@
     </div>
   </div>
   <div class="toasts" id="toasts" role="status" aria-live="polite"></div>
-  <script src="https://cdn.jsdelivr.net/npm/gsap@3/dist/gsap.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/gsap@3/dist/gsap.min.js" defer></script>
   <script type="module" src="/public/js/app.js"></script>
 </body>
 </html>

@@ -16,7 +16,7 @@ export function initHero() {
   const images = cfg.images || [];
   if (!images.length) { el.remove(); return; }
 
-  images.forEach((url) => { new Image().src = url; });
+  if (images[0]) new Image().src = images[0];
 
   const headline = $("#hero-headline");
   const caption = $("#hero-caption");
