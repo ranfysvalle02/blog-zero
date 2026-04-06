@@ -31,12 +31,6 @@
       "auto_crud": true,
       "soft_delete": true,
       "auth": { "public_read": true, "write_roles": ["editor"] },
-      "owner_field": "author_id",
-      "policy": {
-        "write":  { "author_id": "{{user._id}}" },
-        "delete": { "author_id": "{{user._id}}" }
-      },
-      "immutable_fields": ["author_id"],
       "writable_fields": {
         "editor": ["title", "body", "author", "status", "tags", "featured"],
         "moderator": ["status", "tags"]
@@ -88,9 +82,6 @@
           }},
           { "$sort": { "_id": -1 } }
         ]
-      },
-      "relations": {
-        "author_user": { "from": "users", "local_field": "author_id", "foreign_field": "_id", "single": true }
       },
       "hooks": {
         "after_create": [
@@ -309,34 +300,6 @@
           { "$sort": { "count": -1 } }
         ]
       }
-    },
-    "page_views": {
-      "auto_crud": true,
-      "auth": { "required": false },
-      "writable_fields": ["post_id", "referrer"],
-      "schema": {
-        "type": "object",
-        "properties": {
-          "post_id":  { "type": "string" },
-          "referrer": { "type": "string" }
-        },
-        "required": ["post_id"]
-      },
-      "pipelines": {
-        "by_post": [
-          { "$group": { "_id": "$post_id", "views": { "$sum": 1 } } },
-          { "$sort": { "views": -1 } }
-        ],
-        "by_day": [
-          { "$group": {
-            "_id": { "$dateToString": { "format": "%Y-%m-%d", "date": "$created_at" } },
-            "views": { "$sum": 1 }
-          }},
-          { "$sort": { "_id": -1 } },
-          { "$limit": 30 }
-        ]
-      },
-      "ttl": { "field": "created_at", "expire_after": "90d" }
     }
   },
   "compression": {

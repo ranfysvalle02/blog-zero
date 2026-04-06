@@ -60,7 +60,6 @@ export const API_CONFIG = {
     updateUploadTracking: { method: "PATCH", path: "/api/upload_tracking/:id" },
     listUploadTracking: { method: "GET", path: "/api/upload_tracking" },
     listFeatured: { method: "GET", path: "/api/posts", defaults: { scope: "featured", sort: "-created_at", limit: "3" } },
-    trackView: { method: "POST", path: "/api/page_views" },
     tagStats: { method: "GET", path: "/api/posts/_agg/by_tag" },
   },
 };
@@ -273,7 +272,7 @@ export async function api(name, opts = {}) {
   const qs = new URLSearchParams(cleaned).toString();
   const url = API_CONFIG.base + path + (qs ? `?${qs}` : "");
 
-  const fetchOpts = { method: ep.method, headers: {} };
+  const fetchOpts = { method: ep.method, headers: {}, credentials: "include" };
   if (opts.body !== undefined) {
     fetchOpts.headers["Content-Type"] = "application/json";
     fetchOpts.body = JSON.stringify(opts.body);

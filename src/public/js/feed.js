@@ -51,8 +51,6 @@ export async function handleArticleRoute(id, ssrPost, ssrComments) {
     return;
   }
 
-  api("trackView", { body: { post_id: id, referrer: document.referrer } }).catch(() => {});
-
   let commentSection = "";
   if (UI_CONFIG.features.comments) {
     const composer = !isAuthed()
@@ -82,7 +80,6 @@ export async function handleArticleRoute(id, ssrPost, ssrComments) {
     ? (p.tags || []).map((t) => `<span class="tag tag-neutral">${esc(t)}</span>`).join(" ")
     : "";
   const rt = UI_CONFIG.features.readTime ? `<span class="dot"></span><span>${readTime(p.body)}</span>` : "";
-
   const cover = extractCover(p.body || "");
   const coverCaption = cover?.alt && cover.alt !== p.title
     ? `<figcaption class="article-cover-caption">${esc(cover.alt)}</figcaption>` : "";
