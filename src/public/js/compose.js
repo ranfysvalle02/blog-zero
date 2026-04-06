@@ -1,5 +1,5 @@
 import { $, UI_CONFIG, state, esc, md, toast, api, hasRole, go, readTime, showConfirm } from "./utils.js";
-import { processCoverImage, extractImageFiles } from "./image-util.js";
+import { processCoverImage, uploadCoverImage, extractImageFiles } from "./image-util.js";
 
 const AUTOSAVE_KEY = "blog-zero-draft";
 const AUTOSAVE_IMGS_KEY = "blog-zero-draft-imgs";
@@ -570,8 +570,16 @@ function execCommand(cmd) {
 
 async function handleCoverFile(file) {
   if (!file) return;
+  const altText = file.name.replace(/\.[^.]+$/, "").replace(/[_-]+/g, " ");
   try {
-    const altText = file.name.replace(/\.[^.]+$/, "").replace(/[_-]+/g, " ");
+    const { url } = await uploadCoverImage(file);
+    setCoverFromUrl(url, altText);
+    return;
+  } catch (uploadErr) {
+    console.warn("[cover] Upload failed, falling back to embedded image:", uploadErr.message || uploadErr);
+    toast("Image upload unavailable — using embedded image", "info");
+  }
+  try {
     const { dataUri } = await processCoverImage(file);
     setCoverDirect(dataUri, altText);
   } catch (err) {

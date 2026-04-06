@@ -262,6 +262,16 @@
     "images": "max-age=2592000",
     "minify": true
   },
+  "uploads": {
+    "enabled": true,
+    "max_size": "5MB",
+    "allowed_types": ["image/jpeg", "image/png", "image/gif", "image/webp"],
+    "path_prefix": "/uploads",
+    "auth": {
+      "required": true,
+      "roles": ["editor", "admin"]
+    }
+  },
   "ssr": {
     "enabled": true,
     "site_name": "blog-zero",

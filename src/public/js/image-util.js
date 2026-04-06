@@ -129,6 +129,40 @@ export function processCoverImage(file) {
   });
 }
 
+function dataUriToBlob(dataUri) {
+  const [header, b64] = dataUri.split(",");
+  const mime = header.match(/:(.*?);/)[1];
+  const bin = atob(b64);
+  const arr = new Uint8Array(bin.length);
+  for (let i = 0; i < bin.length; i++) arr[i] = bin.charCodeAt(i);
+  return new Blob([arr], { type: mime });
+}
+
+/**
+ * Resize/crop a cover image and upload it to the GridFS upload service.
+ * Returns { url, width, height }. Throws on failure.
+ */
+export async function uploadCoverImage(file) {
+  const { dataUri, width, height } = await processCoverImage(file);
+  const blob = dataUriToBlob(dataUri);
+  const form = new FormData();
+  form.append("file", blob, "cover.jpg");
+
+  const res = await fetch("/api/_uploads", {
+    method: "POST",
+    body: form,
+    credentials: "same-origin",
+  });
+  if (!res.ok) {
+    const detail = await res.json().catch(() => ({}));
+    throw new Error(detail.detail || detail.message || `Upload failed (${res.status})`);
+  }
+  const data = await res.json();
+  const url = data.url || data.path || data.file_url;
+  if (!url) throw new Error("Upload response missing file URL");
+  return { url, width, height };
+}
+
 /**
  * Extract image Files from a ClipboardEvent or DragEvent.
  */
