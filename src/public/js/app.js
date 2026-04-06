@@ -1,7 +1,6 @@
 import { $, $$, BLOG_CONFIG, UI_CONFIG, state, setState, esc, hasRole, isAuthed } from "./utils.js";
 import { bindAuthEvents, refreshSession, showAuthPanel } from "./auth.js";
-import { bindArticleEvents, handleArticleRoute } from "./feed.js";
-import { cleanupArticleEnhancements } from "./article-enhance.js";
+import { bindArticleEvents } from "./feed.js";
 import { bindHomeEvents, loadHome } from "./home.js";
 import { bindBlogEvents, loadBlog } from "./blog.js";
 import { bindComposeEvents, handleComposeRoute } from "./compose.js";
@@ -12,7 +11,7 @@ const routes = {
   home: loadHome,
   blog: loadBlog,
   feed: () => { location.replace("#blog"); },
-  article: handleArticleRoute,
+  article: (id) => { if (id) location.replace(`/s/posts/${encodeURIComponent(id)}`); },
   compose: handleComposeRoute,
   manage: handleManageRoute,
 };
@@ -56,7 +55,6 @@ async function handleRoute() {
   const param = rest.join("/");
   if (!roleGuard(view)) return;
   setState("currentView", view);
-  if (view !== "article") cleanupArticleEnhancements();
 
   if (!initialLoad && document.startViewTransition) {
     const t = document.startViewTransition(() => updateRouteUi(view));

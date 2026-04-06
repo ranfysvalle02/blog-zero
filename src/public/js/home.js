@@ -1,4 +1,4 @@
-import { $, UI_CONFIG, esc, safeAttr, fmtDate, readTime, excerpt, api, go, renderSkeleton, renderError, extractCover, stripCover, applyBgImages } from "./utils.js";
+import { $, UI_CONFIG, esc, safeAttr, fmtDate, readTime, excerpt, api, renderSkeleton, renderError, extractCover, stripCover, applyBgImages } from "./utils.js";
 import { initHero } from "./hero.js";
 
 let heroInitialized = false;
@@ -11,7 +11,7 @@ function renderHeadlineCard(p) {
   const rt = readTime(p.body);
 
   return (
-    `<div class="card-headline" data-post-id="${safeAttr(p._id)}">` +
+    `<a href="/s/posts/${encodeURIComponent(p._id)}" class="card-headline">` +
       `<div class="card-headline-cover${cover ? "" : " card-headline-cover--empty"}" ${coverAttr}>` +
         `<div class="card-headline-overlay">` +
           `<div class="card-headline-meta"><span>${esc(p.author || "Anonymous")}</span><span class="dot"></span><span>${fmtDate(p.created_at)}</span><span class="dot"></span><span>${rt}</span></div>` +
@@ -20,7 +20,7 @@ function renderHeadlineCard(p) {
           (tags ? `<div class="card-headline-tags">${tags}</div>` : "") +
         `</div>` +
       `</div>` +
-    `</div>`
+    `</a>`
   );
 }
 
@@ -30,23 +30,23 @@ function renderSecondaryCard(p) {
   const rt = readTime(p.body);
 
   return (
-    `<div class="card-secondary" data-post-id="${safeAttr(p._id)}">` +
+    `<a href="/s/posts/${encodeURIComponent(p._id)}" class="card-secondary">` +
       (cover ? `<div class="card-secondary-cover" data-bg="${safeAttr(cover.src)}"></div>` : "") +
       `<div class="card-secondary-content">` +
         `<div class="meta"><span>${fmtDate(p.created_at)}</span><span class="dot"></span><span>${rt}</span></div>` +
         `<h3>${esc(p.title)}</h3>` +
         `<p class="excerpt">${esc(excerpt(body, 100))}</p>` +
       `</div>` +
-    `</div>`
+    `</a>`
   );
 }
 
 function renderCompactCard(p) {
   return (
-    `<div class="card-compact" data-post-id="${safeAttr(p._id)}">` +
+    `<a href="/s/posts/${encodeURIComponent(p._id)}" class="card-compact">` +
       `<h4>${esc(p.title)}</h4>` +
       `<div class="meta"><span>${fmtDate(p.created_at)}</span><span class="dot"></span><span>${readTime(p.body)}</span></div>` +
-    `</div>`
+    `</a>`
   );
 }
 
@@ -95,13 +95,4 @@ export async function loadHome() {
 }
 
 export function bindHomeEvents() {
-  $("#home-recent").addEventListener("click", (e) => {
-    const card = e.target.closest("[data-post-id]");
-    if (card) go(`article/${card.dataset.postId}`);
-  });
-  $("#home-recent").addEventListener("keydown", (e) => {
-    if (e.key !== "Enter") return;
-    const card = e.target.closest("[data-post-id]");
-    if (card) go(`article/${card.dataset.postId}`);
-  });
 }

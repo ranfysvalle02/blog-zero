@@ -619,6 +619,8 @@ nav.top .nav-links a.nav-link.active { color: var(--text); background: var(--acc
 }
 
 /* --- Cards (base) --- */
+a.card, a.card-headline, a.card-secondary, a.card-compact { text-decoration: none; color: inherit; display: block; }
+a.card:hover, a.card-headline:hover, a.card-secondary:hover, a.card-compact:hover { text-decoration: none; }
 .card {
   background: var(--surface);
   padding: 22px 24px;

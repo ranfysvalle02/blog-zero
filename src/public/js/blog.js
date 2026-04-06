@@ -1,4 +1,4 @@
-import { $, $$, BLOG_CONFIG, UI_CONFIG, esc, api, go, renderSkeleton, renderError, applyBgImages } from "./utils.js";
+import { $, $$, BLOG_CONFIG, UI_CONFIG, esc, api, renderSkeleton, renderError, applyBgImages } from "./utils.js";
 import { renderCard } from "./feed.js";
 
 let allPosts = [];
@@ -120,14 +120,6 @@ export function bindBlogEvents() {
     if (e.target.closest("#load-more-btn")) {
       visibleCount += PAGE_SIZE;
       renderPosts();
-      return;
     }
-    const card = e.target.closest("[data-post-id]");
-    if (card) go(`article/${card.dataset.postId}`);
-  });
-  listEl.addEventListener("keydown", (e) => {
-    if (e.key !== "Enter") return;
-    const card = e.target.closest("[data-post-id]");
-    if (card) go(`article/${card.dataset.postId}`);
   });
 }

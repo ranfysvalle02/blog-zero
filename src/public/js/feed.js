@@ -22,7 +22,7 @@ export function renderCard(p, extraClass = "") {
   const bodyExcerpt = cover ? excerpt(stripCover(p.body)) : excerpt(p.body);
 
   return (
-    `<div class="card ${cover ? "card-has-cover" : ""} ${esc(extraClass)}" role="article" tabindex="0" data-post-id="${safeAttr(p._id)}">` +
+    `<a href="/s/posts/${encodeURIComponent(p._id)}" class="card ${cover ? "card-has-cover" : ""} ${esc(extraClass)}" role="article">` +
     coverHtml +
     `<div class="card-body">` +
     `<div class="meta">${author}<span>${fmtDate(p.created_at)}</span>${rt}${cc}${imageIndicator}</div>` +
@@ -30,7 +30,7 @@ export function renderCard(p, extraClass = "") {
     `<div class="excerpt">${esc(bodyExcerpt)}</div>` +
     (tags ? `<div class="tags">${tags}</div>` : "") +
     `</div>` +
-    "</div>"
+    "</a>"
   );
 }
 
