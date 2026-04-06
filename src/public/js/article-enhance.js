@@ -78,7 +78,8 @@ function injectTOC(prose) {
     `<svg class="toc-chevron" width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 6l4 4 4-4"/></svg>` +
     `</button>` +
     `<ol class="toc-list">${items.join("")}</ol>`;
-  prose.parentElement.insertBefore(toc, prose);
+  // Place TOC after prose so primary article content remains stable.
+  prose.after(toc);
 
   const toggle = toc.querySelector(".toc-toggle");
   toggle.addEventListener("click", () => {

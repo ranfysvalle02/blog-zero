@@ -788,6 +788,9 @@ a.card:hover, a.card-headline:hover, a.card-secondary:hover, a.card-compact:hove
   margin-bottom: 20px;
   background: none;
   padding: 0;
+  text-decoration: underline;
+  text-decoration-skip-ink: auto;
+  text-underline-offset: 2px;
 }
 .article .back:hover { color: var(--text); text-decoration: none; }
 .article header { margin-bottom: 24px; }
@@ -919,6 +922,16 @@ a.card:hover, a.card-headline:hover, a.card-secondary:hover, a.card-compact:hove
   padding: 10px 12px;
   color: var(--text-faint);
   font-size: 0.82rem;
+}
+.notice a,
+.comments a {
+  text-decoration: underline;
+  text-decoration-skip-ink: auto;
+  text-underline-offset: 2px;
+}
+.notice a:hover,
+.comments a:hover {
+  text-decoration-thickness: 2px;
 }
 .loading-text { color: var(--text-faint); font-size: 0.875rem; }
 

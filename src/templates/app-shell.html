@@ -101,8 +101,28 @@
       <div id="blog-list" role="feed" aria-label="Posts"></div>
     </section>
 
-    <section class="view" id="view-article" aria-label="Article">
-      <article class="article" id="article-content"></article>
+    <section class="view {% if post is defined %}active{% endif %}" id="view-article" aria-label="Article">
+      <article class="article" id="article-content">
+        {% if post is defined %}
+        <a href="/#blog" class="back">&larr; Back to Blog</a>
+        {% if post.cover_image and not post.cover_image.startswith("data:") %}
+        <figure class="article-cover">
+          <img src="{{ post.cover_image }}" alt="{{ post.title }}">
+        </figure>
+        {% endif %}
+        <header>
+          <h1 tabindex="-1">{{ post.title }}</h1>
+          <div class="meta">
+            <span>{{ post.author or "Anonymous" }}</span>
+            {% if post.created_at %}<span class="dot"></span><span>{{ post.created_at }}</span>{% endif %}
+            {% if post.reading_time %}<span class="dot"></span><span>{{ post.reading_time }} min read</span>{% endif %}
+          </div>
+        </header>
+        <div class="prose prose-ssr-skeleton" style="min-height: {{ ((post.reading_time or 3) * 180) }}px;">
+          <p>Loading article content...</p>
+        </div>
+        {% endif %}
+      </article>
     </section>
 
     <section class="view" id="view-compose" aria-label="Post editor">
