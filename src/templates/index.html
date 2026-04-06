@@ -42,28 +42,73 @@
     {% endif %}
 
     {% if posts %}
-    <div class="feed" role="feed" aria-label="Posts">
-      {% for p in posts %}
-      <a href="/s/posts/{{ p._id }}" class="card" role="article">
-        <div class="meta">
-          <span>{{ p.author or "Anonymous" }}</span>
-          <span class="dot"></span>
-          <span>{{ p.created_at[:10] if p.created_at else "" }}</span>
-          {% if p.comment_count is defined %}
-          <span class="dot"></span>
-          <span>{{ p.comment_count }} comment{{ "s" if p.comment_count != 1 else "" }}</span>
-          {% endif %}
+
+    {#- ── Headline card (first post) ────────────────────────────── -#}
+    {% set hero = posts[0] %}
+    {% set hero_cover = hero.cover_image | default("", true) | trim %}
+    <section class="home-section home-section--headline">
+      <a href="/s/posts/{{ hero._id }}" class="card-headline">
+        <div class="card-headline-cover{{ '' if hero_cover else ' card-headline-cover--empty' }}"{% if hero_cover %} style="background-image:url({{ hero_cover }})"{% endif %}>
+          <div class="card-headline-overlay">
+            <div class="card-headline-meta">
+              <span>{{ hero.author or "Anonymous" }}</span>
+              <span class="dot"></span>
+              <span>{{ hero.created_at[:10] if hero.created_at else "" }}</span>
+            </div>
+            <h2 class="card-headline-title">{{ hero.title }}</h2>
+            <p class="card-headline-excerpt">{{ hero.body | default("", true) | markdown | striptags | truncate(180) }}</p>
+            {% if hero.tags %}
+            <div class="card-headline-tags">
+              {% for t in hero.tags[:3] %}<span class="tag tag-neutral">{{ t }}</span>{% endfor %}
+            </div>
+            {% endif %}
+          </div>
         </div>
-        <h2>{{ p.title }}</h2>
-        <div class="excerpt">{{ (p.body or "")[:210] | replace("#", "") | replace("*", "") | replace("`", "") | truncate(210) }}</div>
-        {% if p.tags %}
-        <div class="tags">
-          {% for t in p.tags %}<span>{{ t }}</span>{% endfor %}
-        </div>
-        {% endif %}
       </a>
-      {% endfor %}
-    </div>
+    </section>
+
+    {#- ── Secondary cards (posts 2-3) ───────────────────────────── -#}
+    {% set secondaries = posts[1:3] %}
+    {% if secondaries %}
+    <section class="home-section">
+      <h3 class="home-section-label">More Stories</h3>
+      <div class="home-secondary-grid">
+        {% for p in secondaries %}
+        {% set p_cover = p.cover_image | default("", true) | trim %}
+        <a href="/s/posts/{{ p._id }}" class="card-secondary">
+          {% if p_cover %}
+          <div class="card-secondary-cover" style="background-image:url({{ p_cover }})"></div>
+          {% endif %}
+          <div class="card-secondary-content">
+            <div class="meta">
+              <span>{{ p.created_at[:10] if p.created_at else "" }}</span>
+            </div>
+            <h3>{{ p.title }}</h3>
+            <p class="excerpt">{{ p.body | default("", true) | markdown | striptags | truncate(100) }}</p>
+          </div>
+        </a>
+        {% endfor %}
+      </div>
+    </section>
+    {% endif %}
+
+    {#- ── Compact cards (remaining posts) ───────────────────────── -#}
+    {% set compacts = posts[3:] %}
+    {% if compacts %}
+    <section class="home-section">
+      <h3 class="home-section-label">Latest</h3>
+      <div class="home-compact-grid">
+        {% for p in compacts %}
+        <a href="/s/posts/{{ p._id }}" class="card-compact">
+          <h4>{{ p.title }}</h4>
+          <div class="meta">
+            <span>{{ p.created_at[:10] if p.created_at else "" }}</span>
+          </div>
+        </a>
+        {% endfor %}
+      </div>
+    </section>
+    {% endif %}
 
     {% if posts_pagination %}
     <nav class="cta-block" aria-label="Pagination">

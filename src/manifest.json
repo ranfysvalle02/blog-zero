@@ -134,7 +134,7 @@
         ]
       },
       "cache": {
-        "scope:published": { "ttl": "5m", "stale_while_revalidate": "30s" },
+        "scope:published": { "ttl": "0s" },
         "default": { "ttl": "0s" }
       }
     },
@@ -293,7 +293,7 @@
           "title": "blog-zero",
           "description": "Stories from the edge of code and creativity."
         },
-        "cache": { "ttl": "5m", "stale_while_revalidate": "30s" }
+        "cache": { "ttl": "0s" }
       },
       "/s/posts/{id}": {
         "template": "post.html",
@@ -329,7 +329,7 @@
             }
           }
         },
-        "cache": { "ttl": "10m", "stale_while_revalidate": "1m" }
+        "cache": { "ttl": "0s" }
       }
     }
   },
