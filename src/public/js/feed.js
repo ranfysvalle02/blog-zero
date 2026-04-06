@@ -51,6 +51,8 @@ export async function handleArticleRoute(id, ssrPost, ssrComments) {
     return;
   }
 
+  api("trackView", { body: { post_id: id, referrer: document.referrer } }).catch(() => {});
+
   let commentSection = "";
   if (UI_CONFIG.features.comments) {
     const composer = !isAuthed()

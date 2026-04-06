@@ -160,7 +160,22 @@ export async function uploadCoverImage(file) {
   const data = await res.json();
   const url = data.url || data.path || data.file_url;
   if (!url) throw new Error("Upload response missing file URL");
-  return { url, width, height };
+
+  let trackingId = null;
+  try {
+    const tRes = await fetch("/api/upload_tracking", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      credentials: "same-origin",
+      body: JSON.stringify({ url, filename: "cover.jpg" }),
+    });
+    if (tRes.ok) {
+      const tData = await tRes.json();
+      trackingId = tData?.data?._id || tData?._id || null;
+    }
+  } catch { /* tracking is best-effort */ }
+
+  return { url, width, height, trackingId };
 }
 
 /**

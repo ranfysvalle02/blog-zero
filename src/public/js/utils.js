@@ -56,6 +56,11 @@ export const API_CONFIG = {
     createComment: { method: "POST", path: "/api/comments" },
     updateComment: { method: "PATCH", path: "/api/comments/:id" },
     listAuditLog: { method: "GET", path: "/api/audit_log" },
+    createUploadTracking: { method: "POST", path: "/api/upload_tracking" },
+    updateUploadTracking: { method: "PATCH", path: "/api/upload_tracking/:id" },
+    listUploadTracking: { method: "GET", path: "/api/upload_tracking" },
+    listFeatured: { method: "GET", path: "/api/posts", defaults: { scope: "featured", sort: "-created_at", limit: "3" } },
+    trackView: { method: "POST", path: "/api/page_views" },
     tagStats: { method: "GET", path: "/api/posts/_agg/by_tag" },
   },
 };

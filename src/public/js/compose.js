@@ -18,6 +18,7 @@ let _popularTags = [];
 
 let _coverImageId = null;
 let _coverAlt = "";
+let _pendingTrackingId = null;
 
 /* ================================================================
    Image Store — tokens in the textarea, data in memory
@@ -64,6 +65,7 @@ function resetImageStore() {
   _imgCounter = 0;
   _coverImageId = null;
   _coverAlt = "";
+  _pendingTrackingId = null;
 }
 
 function removeCover() {
@@ -311,6 +313,15 @@ async function submitPost(status) {
     ? await api("updatePost", { pathParams: { id: editId }, body: payload })
     : await api("createPost", { body: payload });
   if (!r.ok) { toast(r.data?.detail || "Save failed", "err"); return; }
+
+  const savedId = r.data?.data?._id || editId;
+  if (_pendingTrackingId && savedId) {
+    api("updateUploadTracking", {
+      pathParams: { id: _pendingTrackingId },
+      body: { status: "active", post_id: savedId },
+    }).catch(() => {});
+    _pendingTrackingId = null;
+  }
 
   toast(editId ? "Post updated" : status === "published" ? "Published!" : "Draft saved");
   clearAutoSave();
@@ -572,7 +583,8 @@ async function handleCoverFile(file) {
   if (!file) return;
   const altText = file.name.replace(/\.[^.]+$/, "").replace(/[_-]+/g, " ");
   try {
-    const { url } = await uploadCoverImage(file);
+    const { url, trackingId } = await uploadCoverImage(file);
+    _pendingTrackingId = trackingId;
     setCoverFromUrl(url, altText);
     return;
   } catch (uploadErr) {
