@@ -37,7 +37,7 @@ src/
 
 | Surface | Tech | Who it serves |
 |---------|------|---------------|
-| **SSR** (`/s`, `/s/posts/{id}`) | Jinja2 templates, server-rendered | Crawlers, SEO, link previews, no-JS readers |
+| **SSR** (`/`, `/posts/{id}`, `/tags/{tag}`) | Jinja2 templates, server-rendered | Crawlers, SEO, link previews, no-JS readers |
 | **SPA** (`/#home`, `/#blog`, `/#compose`, `/#manage`) | Vanilla JS modules | Logged-in users, admin, interactive features |
 
 Both share `style.css`. SSR pages link to the SPA ("Open in App") for
@@ -156,8 +156,8 @@ Crawlers and link previews get fully rendered HTML with pagination, JSON-LD,
 "ssr": {
   "enabled": true,
   "routes": {
-    "/s": { "template": "index.html", "data": { "posts": { ... } }, "cache": { "ttl": "5m" } },
-    "/s/posts/{id}": { "template": "post.html", "seo": { "json_ld": { "@type": "BlogPosting", ... } } }
+    "/": { "template": "app-shell.html", "data": { "posts": { ... } }, "cache": { "ttl": "15s" } },
+    "/posts/{id}": { "template": "app-shell.html", "seo": { "json_ld": { "@type": "BlogPosting", ... } } }
   }
 }
 ```
@@ -190,9 +190,8 @@ Override admin credentials:
 ADMIN_EMAIL=me@corp.com ADMIN_PASSWORD=supersecret docker compose up
 ```
 
-- **SPA:** http://localhost:8000 (hash-routed app with admin views)
-- **SSR home:** http://localhost:8000/s (server-rendered, SEO-friendly)
-- **SSR article:** http://localhost:8000/s/posts/{id}
+- **Home:** http://localhost:8000 (SSR + SPA hydration)
+- **Article:** http://localhost:8000/posts/{id} (SSR with JSON-LD)
 - **Sitemap:** http://localhost:8000/sitemap.xml
 - **Swagger docs:** http://localhost:8000/docs
 

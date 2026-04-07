@@ -7,18 +7,6 @@ import { bindComposeEvents, handleComposeRoute } from "./compose.js";
 import { bindManageEvents, handleManageRoute } from "./manage.js";
 import { updateSeo } from "./seo.js";
 
-// --- Legacy /s/ URL migration: rewrite to clean path before anything runs ---
-(function migrateLegacyUrl() {
-  const m = location.pathname.match(/^\/s\/posts\/([^/]+)$/);
-  if (m) {
-    history.replaceState(null, "", "/posts/" + m[1] + location.hash);
-    return;
-  }
-  if (location.pathname === "/s" || location.pathname === "/s/") {
-    history.replaceState(null, "", "/" + location.hash);
-  }
-})();
-
 // --- SSR data: consumed once on first boot, then discarded ---
 let ssrData = null;
 (function consumeSSRData() {
