@@ -325,10 +325,17 @@
   },
   "ssr": {
     "enabled": true,
+    "lang": "en",
     "site_name": "blog-zero",
     "site_description": "A full-featured blog built from a single JSON manifest.",
     "base_url": "https://blog.oblivio-company.com",
     "sitemap": true,
+    "trailing_slash": "strip",
+    "redirects": {
+      "/s": { "to": "/", "status": 301 },
+      "/s/posts/{id}": { "to": "/posts/{id}", "status": 301 },
+      "/s/tags/{tag}": { "to": "/tags/{tag}", "status": 301 }
+    },
     "preload": [
       { "href": "/public/style.css", "as": "style" },
       { "href": "/public/fonts/inter-latin.woff2", "as": "font", "crossorigin": true },
@@ -394,26 +401,32 @@
               "@type": "Organization",
               "name": "blog-zero"
             }
-          }
+          },
+          "breadcrumbs": [
+            { "name": "Home", "url": "{{base_url}}/" },
+            { "name": "{{post.title}}", "url": "{{base_url}}/posts/{{post._id}}" }
+          ]
         },
         "preload": [
           { "href": "/public/js/app.js", "as": "script" }
         ],
-        "cache": { "ttl": "15s", "stale_while_revalidate": "5s" }
+        "cache": { "ttl": "15s", "stale_while_revalidate": "5s", "etag": true }
       },
       "/about": {
         "template": "about.html",
         "seo": {
           "title": "About — blog-zero",
           "description": "About blog-zero — a full-featured blog built from a single JSON manifest."
-        }
+        },
+        "cache": { "ttl": "1h", "etag": true }
       },
       "/community": {
         "template": "community.html",
         "seo": {
           "title": "Community Guidelines & Terms — blog-zero",
           "description": "Community guidelines, terms of use, and privacy practices for blog-zero."
-        }
+        },
+        "cache": { "ttl": "1h", "etag": true }
       },
       "/tags/{tag}": {
         "template": "app-shell.html",
@@ -427,7 +440,8 @@
         },
         "seo": {
           "title": "Posts tagged '{{params.tag}}' — blog-zero",
-          "description": "All posts tagged with {{params.tag}}."
+          "description": "All posts tagged with {{params.tag}}.",
+          "robots": "noindex, follow"
         },
         "cache": { "ttl": "30s", "stale_while_revalidate": "10s" }
       }
