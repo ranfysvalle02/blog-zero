@@ -1824,6 +1824,21 @@ a.card:hover, a.card-headline:hover, a.card-secondary:hover, a.card-compact:hove
 .card-secondary-content {
   padding: 16px 20px 20px;
 }
+.card-secondary-content .meta {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 0.72rem;
+  color: var(--text-faint);
+  margin-bottom: 8px;
+  flex-wrap: wrap;
+}
+.card-secondary-content .meta .dot {
+  width: 3px; height: 3px;
+  border-radius: 50%;
+  background: var(--text-faint);
+  flex-shrink: 0;
+}
 .card-secondary-content h3 {
   font-size: 1.05rem;
   font-weight: 600;
