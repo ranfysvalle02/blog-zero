@@ -213,7 +213,6 @@ function injectReferences(prose) {
 let _katexLoaded = false;
 
 function renderMath(prose) {
-  if (!prose.textContent.includes("$")) return;
   normalizeMathText(prose);
   if (_katexLoaded) {
     _doRenderMath(prose);
