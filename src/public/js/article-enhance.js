@@ -308,6 +308,20 @@ function loadScript(src) {
   });
 }
 
+// Failsafe for SSR article loads: ensure math render still runs even if
+// the route enhancer path is skipped for any reason.
+function bootstrapMathFallback() {
+  const prose = document.querySelector("#article-content .prose");
+  if (!prose) return;
+  renderMath(prose);
+}
+
+if (document.readyState === "loading") {
+  document.addEventListener("DOMContentLoaded", bootstrapMathFallback, { once: true });
+} else {
+  queueMicrotask(bootstrapMathFallback);
+}
+
 /* ---- Scroll-Reveal Animations ---- */
 
 function initScrollReveal(prose) {
