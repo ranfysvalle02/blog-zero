@@ -7,7 +7,7 @@
 {% endblock %}
 
 {% block head %}
-  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' https://cdn.jsdelivr.net 'sha256-9Qa6J7TaZvhLK9RCAyMWk0sTYdtT1U9fOjKXSisTySQ='; style-src 'self' 'unsafe-hashes' 'sha256-t6oewASd7J1vBg5mQtX4hl8bg8FeegYFM3scKLIhYUc='; img-src 'self' https://images.unsplash.com data:; connect-src 'self' https://cdn.jsdelivr.net; font-src 'self';">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' https://cdn.jsdelivr.net 'sha256-9Qa6J7TaZvhLK9RCAyMWk0sTYdtT1U9fOjKXSisTySQ='; style-src 'self' 'unsafe-hashes' 'sha256-t6oewASd7J1vBg5mQtX4hl8bg8FeegYFM3scKLIhYUc=' https://cdn.jsdelivr.net; img-src 'self' https://images.unsplash.com data:; connect-src 'self' https://cdn.jsdelivr.net; font-src 'self' https://cdn.jsdelivr.net;">
   <link rel="icon" href="{{ asset_url('favicon.svg') }}" type="image/svg+xml">
   <link rel="stylesheet" href="{{ asset_url('style.css') }}">
   {% if post is not defined %}

@@ -16,6 +16,7 @@ export function enhanceArticle(postId) {
   injectTOC(prose);
   injectHeadingAnchors(prose, postId);
   injectCodeCopyButtons(prose);
+  renderMath(prose);
   injectReferences(prose);
   initScrollReveal(prose);
   enhanceArticleImages(article);
@@ -205,6 +206,41 @@ function injectReferences(prose) {
     li.style.animationDelay = `${i * 50}ms`;
   });
   prose.after(section);
+}
+
+/* ---- Math (KaTeX) ---- */
+
+let _katexLoaded = false;
+
+function renderMath(prose) {
+  if (!prose.textContent.includes("$")) return;
+  if (_katexLoaded) {
+    _doRenderMath(prose);
+    return;
+  }
+  const link = document.createElement("link");
+  link.rel = "stylesheet";
+  link.href = "https://cdn.jsdelivr.net/npm/katex@0.16.22/dist/katex.min.css";
+  document.head.appendChild(link);
+
+  import("https://cdn.jsdelivr.net/npm/katex@0.16.22/dist/katex.mjs").then((katex) => {
+    window.katex = katex.default || katex;
+    return import("https://cdn.jsdelivr.net/npm/katex@0.16.22/dist/contrib/auto-render.mjs");
+  }).then((mod) => {
+    window.renderMathInElement = mod.default || mod;
+    _katexLoaded = true;
+    _doRenderMath(prose);
+  }).catch(() => {});
+}
+
+function _doRenderMath(prose) {
+  window.renderMathInElement(prose, {
+    delimiters: [
+      { left: "$$", right: "$$", display: true },
+      { left: "$", right: "$", display: false },
+    ],
+    throwOnError: false,
+  });
 }
 
 /* ---- Scroll-Reveal Animations ---- */
