@@ -218,28 +218,67 @@ function renderMath(prose) {
     _doRenderMath(prose);
     return;
   }
-  const link = document.createElement("link");
-  link.rel = "stylesheet";
-  link.href = "https://cdn.jsdelivr.net/npm/katex@0.16.22/dist/katex.min.css";
-  document.head.appendChild(link);
-
-  import("https://cdn.jsdelivr.net/npm/katex@0.16.22/dist/katex.mjs").then((katex) => {
-    window.katex = katex.default || katex;
-    return import("https://cdn.jsdelivr.net/npm/katex@0.16.22/dist/contrib/auto-render.mjs");
-  }).then((mod) => {
-    window.renderMathInElement = mod.default || mod;
+  ensureKatexCss();
+  loadKatex().then(() => {
     _katexLoaded = true;
     _doRenderMath(prose);
   }).catch(() => {});
 }
 
 function _doRenderMath(prose) {
+  if (!window.renderMathInElement) return;
   window.renderMathInElement(prose, {
     delimiters: [
       { left: "$$", right: "$$", display: true },
       { left: "$", right: "$", display: false },
     ],
     throwOnError: false,
+  });
+}
+
+function ensureKatexCss() {
+  if (document.querySelector('link[data-katex-css="1"]')) return;
+  const link = document.createElement("link");
+  link.rel = "stylesheet";
+  link.href = "https://cdn.jsdelivr.net/npm/katex@0.16.22/dist/katex.min.css";
+  link.dataset.katexCss = "1";
+  document.head.appendChild(link);
+}
+
+async function loadKatex() {
+  if (window.katex && window.renderMathInElement) return;
+  try {
+    const katex = await import("https://cdn.jsdelivr.net/npm/katex@0.16.22/dist/katex.mjs");
+    window.katex = katex.default || katex;
+    const mod = await import("https://cdn.jsdelivr.net/npm/katex@0.16.22/dist/contrib/auto-render.mjs");
+    window.renderMathInElement = mod.default || mod;
+    return;
+  } catch {
+    await loadScript("https://cdn.jsdelivr.net/npm/katex@0.16.22/dist/katex.min.js");
+    await loadScript("https://cdn.jsdelivr.net/npm/katex@0.16.22/dist/contrib/auto-render.min.js");
+  }
+}
+
+function loadScript(src) {
+  const existing = document.querySelector(`script[data-katex-src="${src}"]`);
+  if (existing) {
+    if (existing.dataset.loaded === "1") return Promise.resolve();
+    return new Promise((resolve, reject) => {
+      existing.addEventListener("load", () => resolve(), { once: true });
+      existing.addEventListener("error", () => reject(new Error(`Failed to load ${src}`)), { once: true });
+    });
+  }
+  return new Promise((resolve, reject) => {
+    const script = document.createElement("script");
+    script.src = src;
+    script.defer = true;
+    script.dataset.katexSrc = src;
+    script.onload = () => {
+      script.dataset.loaded = "1";
+      resolve();
+    };
+    script.onerror = () => reject(new Error(`Failed to load ${src}`));
+    document.head.appendChild(script);
   });
 }
 

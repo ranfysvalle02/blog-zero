@@ -308,7 +308,7 @@ export function md(src) {
 function protectMath(src) {
   const tokens = [];
   const source = src.replace(/\$\$[\s\S]+?\$\$|\$(?:\\.|[^$\n\\])+\$/g, (match) => {
-    const token = `__MATH_TOKEN_${tokens.length}__`;
+    const token = `MATH_TOKEN_${tokens.length}_ZXQ`;
     tokens.push(match);
     return token;
   });
@@ -318,7 +318,7 @@ function protectMath(src) {
 function restoreMath(html, tokens) {
   if (!tokens.length) return html;
   return tokens.reduce((out, expr, idx) => {
-    return out.replaceAll(`__MATH_TOKEN_${idx}__`, esc(expr));
+    return out.replaceAll(`MATH_TOKEN_${idx}_ZXQ`, esc(expr));
   }, html);
 }
 
