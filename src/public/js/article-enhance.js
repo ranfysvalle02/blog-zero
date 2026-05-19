@@ -214,6 +214,7 @@ let _katexLoaded = false;
 
 function renderMath(prose) {
   if (!prose.textContent.includes("$")) return;
+  normalizeMathText(prose);
   if (_katexLoaded) {
     _doRenderMath(prose);
     return;
@@ -233,6 +234,32 @@ function _doRenderMath(prose) {
       { left: "$", right: "$", display: false },
     ],
     throwOnError: false,
+  });
+}
+
+function normalizeMathText(prose) {
+  const walker = document.createTreeWalker(prose, NodeFilter.SHOW_TEXT);
+  const textNodes = [];
+  while (walker.nextNode()) {
+    const node = walker.currentNode;
+    const parentTag = node.parentElement?.tagName;
+    if (parentTag === "CODE" || parentTag === "PRE") continue;
+    if (node.nodeValue?.includes("$")) textNodes.push(node);
+  }
+
+  textNodes.forEach((node) => {
+    node.nodeValue = node.nodeValue.replace(/\$\$[\s\S]+?\$\$|\$(?:\\.|[^$\n\\])+\$/g, (expr) => {
+      const isDisplay = expr.startsWith("$$");
+      const left = isDisplay ? "$$" : "$";
+      const right = isDisplay ? "$$" : "$";
+      const core = expr.slice(left.length, expr.length - right.length);
+      const normalized = core
+        // Convert markdown-escaped LaTeX commands (e.g., \\theta) to \theta.
+        .replace(/\\\\([A-Za-z])/g, "\\$1")
+        // Convert escaped subscripts (e.g., \_t) to proper LaTeX subscripts (_t).
+        .replace(/\\_/g, "_");
+      return `${left}${normalized}${right}`;
+    });
   });
 }
 
