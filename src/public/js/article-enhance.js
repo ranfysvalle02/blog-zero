@@ -214,15 +214,19 @@ let _katexLoaded = false;
 
 function renderMath(prose) {
   normalizeMathText(prose);
-  if (_katexLoaded) {
-    _doRenderMath(prose);
-    return;
-  }
   ensureKatexCss();
-  loadKatex().then(() => {
-    _katexLoaded = true;
-    _doRenderMath(prose);
-  }).catch(() => {});
+  loadKatex()
+    .then(() => {
+      _katexLoaded = true;
+      if (typeof window.renderMathInElement === "function") {
+        _doRenderMath(prose);
+        return;
+      }
+      renderMathFallback(prose);
+    })
+    .catch(() => {
+      renderMathFallback(prose);
+    });
 }
 
 function _doRenderMath(prose) {
@@ -272,7 +276,7 @@ function ensureKatexCss() {
 }
 
 async function loadKatex() {
-  if (window.katex && window.renderMathInElement) return;
+  if (window.katex && typeof window.renderMathInElement === "function") return;
   try {
     const katex = await import("https://cdn.jsdelivr.net/npm/katex@0.16.22/dist/katex.mjs");
     window.katex = katex.default || katex;
@@ -305,6 +309,42 @@ function loadScript(src) {
     };
     script.onerror = () => reject(new Error(`Failed to load ${src}`));
     document.head.appendChild(script);
+  });
+}
+
+function renderMathFallback(prose) {
+  const walker = document.createTreeWalker(prose, NodeFilter.SHOW_TEXT);
+  const textNodes = [];
+  while (walker.nextNode()) {
+    const node = walker.currentNode;
+    const parentTag = node.parentElement?.tagName;
+    if (parentTag === "CODE" || parentTag === "PRE") continue;
+    if (node.nodeValue?.includes("$")) textNodes.push(node);
+  }
+
+  textNodes.forEach((node) => {
+    const parts = node.nodeValue.split(/(\$\$[\s\S]+?\$\$|\$(?:\\.|[^$\n\\])+\$)/g);
+    if (parts.length <= 1) return;
+    const frag = document.createDocumentFragment();
+    parts.forEach((part) => {
+      if (!part) return;
+      if (/^\$\$[\s\S]+?\$\$$/.test(part)) {
+        const pre = document.createElement("pre");
+        pre.className = "math-fallback-block";
+        const code = document.createElement("code");
+        code.textContent = part.slice(2, -2).trim();
+        pre.appendChild(code);
+        frag.appendChild(pre);
+      } else if (/^\$(?:\\.|[^$\n\\])+\$$/.test(part)) {
+        const code = document.createElement("code");
+        code.className = "math-fallback-inline";
+        code.textContent = part.slice(1, -1).trim();
+        frag.appendChild(code);
+      } else {
+        frag.appendChild(document.createTextNode(part));
+      }
+    });
+    node.parentNode?.replaceChild(frag, node);
   });
 }
 
