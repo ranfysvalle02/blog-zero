@@ -300,7 +300,26 @@ DOMPurify.addHook("afterSanitizeAttributes", (node) => {
 
 export function md(src) {
   if (!src) return "";
-  return DOMPurify.sanitize(marked.parse(src));
+  const { source, tokens } = protectMath(src);
+  const safeHtml = DOMPurify.sanitize(marked.parse(source));
+  return restoreMath(safeHtml, tokens);
+}
+
+function protectMath(src) {
+  const tokens = [];
+  const source = src.replace(/\$\$[\s\S]+?\$\$|\$(?:\\.|[^$\n\\])+\$/g, (match) => {
+    const token = `__MATH_TOKEN_${tokens.length}__`;
+    tokens.push(match);
+    return token;
+  });
+  return { source, tokens };
+}
+
+function restoreMath(html, tokens) {
+  if (!tokens.length) return html;
+  return tokens.reduce((out, expr, idx) => {
+    return out.replaceAll(`__MATH_TOKEN_${idx}__`, esc(expr));
+  }, html);
 }
 
 export function applyBgImages(root = document) {
